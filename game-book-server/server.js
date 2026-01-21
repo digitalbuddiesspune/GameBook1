@@ -28,15 +28,19 @@ app.use(cors({
 
 // Debugging middleware to log incoming requests
 app.use((req, res, next) => {
-  if (req.path.includes('/api/auth')) {
+  if (req.path.includes('/api/auth') || req.originalUrl.includes('/api/auth')) {
+    console.log('📥 [REQUEST] ========================================');
     console.log('📥 [REQUEST] Method:', req.method);
     console.log('📥 [REQUEST] Path:', req.path);
     console.log('📥 [REQUEST] Original URL:', req.originalUrl);
     console.log('📥 [REQUEST] Base URL:', req.baseUrl);
-    console.log('📥 [REQUEST] Headers:', JSON.stringify(req.headers));
-    if (req.method === 'POST') {
-      console.log('📥 [REQUEST] Body:', JSON.stringify(req.body));
+    console.log('📥 [REQUEST] Content-Type:', req.headers['content-type']);
+    console.log('📥 [REQUEST] Body Type:', typeof req.body);
+    console.log('📥 [REQUEST] Body Keys:', req.body ? Object.keys(req.body) : 'No body');
+    if (req.method === 'POST' && req.body) {
+      console.log('📥 [REQUEST] Full Body:', JSON.stringify(req.body, null, 2));
     }
+    console.log('📥 [REQUEST] ========================================');
   }
   next();
 });

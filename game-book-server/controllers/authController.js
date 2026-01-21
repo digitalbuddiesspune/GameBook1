@@ -13,11 +13,27 @@ exports.login = async (req, res) => {
     console.log("➡️ [LOGIN] Path:", req.path);
     console.log("➡️ [LOGIN] Original URL:", req.originalUrl);
     
-    const { identifier, password } = req.body; // identifier can be username or mobile
+    // Support both 'identifier' and 'email' for backward compatibility
+    // Also support 'mobile' as an alternative
+    const identifier = req.body.identifier || req.body.email || req.body.mobile || req.body.username;
+    const password = req.body.password;
 
     // Validate that identifier and password are provided
     if (!identifier || !password) {
-      console.log("❌ [LOGIN] Missing identifier or password.");
+      console.log("❌ [LOGIN] Missing identifier/email/mobile or password.");
+      console.log("❌ [LOGIN] Received body keys:", Object.keys(req.body));
+      return res.status(400).json({ 
+        success: false,
+        message: "Please provide identifier (username or mobile) and password" 
+      });
+    }
+
+    // Trim whitespace from identifier
+    const cleanIdentifier = String(identifier).trim();
+    const cleanPassword = String(password).trim();
+
+    if (!cleanIdentifier || !cleanPassword) {
+      console.log("❌ [LOGIN] Empty identifier or password after trimming.");
       return res.status(400).json({ 
         success: false,
         message: "Please provide identifier (username or mobile) and password" 
@@ -30,19 +46,35 @@ exports.login = async (req, res) => {
 
     try {
       // Auto-detect user type: try to find by username first (admin), then by mobile (vendor)
-      user = await User.findOne({ username: identifier, role: 'admin' });
+      user = await User.findOne({ username: cleanIdentifier, role: 'admin' });
       
       if (user) {
         userType = 'admin';
+        console.log("✅ [LOGIN] Found admin user with username:", cleanIdentifier);
       } else {
         // If not found as admin, try as vendor in Vendor collection
-        user = await Vendor.findOne({ mobile: identifier });
+        // Try exact match first
+        user = await Vendor.findOne({ mobile: cleanIdentifier });
+        
+        // If not found, try with different formats (remove spaces, dashes, etc.)
+        if (!user) {
+          const normalizedMobile = cleanIdentifier.replace(/[\s\-\(\)]/g, '');
+          user = await Vendor.findOne({ 
+            $or: [
+              { mobile: cleanIdentifier },
+              { mobile: normalizedMobile }
+            ]
+          });
+        }
+        
         if (user) {
           userType = 'vendor';
+          console.log("✅ [LOGIN] Found vendor user with mobile:", cleanIdentifier);
         }
       }
     } catch (dbError) {
       console.error("❌ [LOGIN] Database query error:", dbError.message);
+      console.error("❌ [LOGIN] Database error stack:", dbError.stack);
       return res.status(503).json({
         success: false,
         message: "Database connection error. Please try again later."
@@ -52,7 +84,7 @@ exports.login = async (req, res) => {
     console.log("➡️ [LOGIN] Database search complete.");
 
     if (!user) {
-      console.log("❌ [LOGIN] User not found.");
+      console.log("❌ [LOGIN] User not found for identifier:", cleanIdentifier);
       return res.status(401).json({ 
         success: false,
         message: "Invalid credentials" 
@@ -70,7 +102,17 @@ exports.login = async (req, res) => {
     }
     
     console.log(`✅ [LOGIN] User found with type: ${userType}. Comparing passwords...`);
-    const isMatch = await bcrypt.compare(password, user.password);
+    
+    // Check if user has a password hash
+    if (!user.password) {
+      console.log("❌ [LOGIN] User has no password hash.");
+      return res.status(401).json({ 
+        success: false,
+        message: "Invalid credentials" 
+      });
+    }
+    
+    const isMatch = await bcrypt.compare(cleanPassword, user.password);
 
     if (!isMatch) {
       console.log("❌ [LOGIN] Password does not match.");
