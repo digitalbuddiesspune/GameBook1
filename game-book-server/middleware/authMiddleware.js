@@ -34,7 +34,13 @@ const validateSystemHealth = async (req, res, next) => {
   try {
     // Skip system health check for login and test routes to ensure they're always accessible
     const path = req.path || req.originalUrl || '';
-    if (path.includes('/login') || path.includes('/test') || path === '/') {
+    const originalUrl = req.originalUrl || '';
+    
+    console.log(`[SYSTEM HEALTH] Checking path: ${path}, originalUrl: ${originalUrl}`);
+    
+    if (path.includes('/login') || path.includes('/test') || path === '/' || 
+        originalUrl.includes('/login') || originalUrl.includes('/test')) {
+      console.log(`[SYSTEM HEALTH] Skipping health check for: ${path}`);
       return next();
     }
 

@@ -11,7 +11,13 @@ if (!login) {
 
 // Log all requests to auth routes for debugging
 router.use((req, res, next) => {
-  console.log(`[AUTH ROUTES] ${req.method} ${req.path} - Original URL: ${req.originalUrl}`);
+  console.log(`[AUTH ROUTES] ========================================`);
+  console.log(`[AUTH ROUTES] Method: ${req.method}`);
+  console.log(`[AUTH ROUTES] Path: ${req.path}`);
+  console.log(`[AUTH ROUTES] Original URL: ${req.originalUrl}`);
+  console.log(`[AUTH ROUTES] Base URL: ${req.baseUrl}`);
+  console.log(`[AUTH ROUTES] Route stack length: ${router.stack?.length || 0}`);
+  console.log(`[AUTH ROUTES] ========================================`);
   next();
 });
 

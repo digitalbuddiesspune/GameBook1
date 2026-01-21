@@ -97,7 +97,22 @@ if (authRoutes && authRoutes.stack) {
 }
 
 // Use Routes - Login route should be accessible even if system health check fails
-app.use("/api/auth", validateSystemHealth, authRoutes);
+console.log("🔧 [SERVER] Registering /api/auth routes...");
+
+// Register auth routes
+app.use("/api/auth", (req, res, next) => {
+  console.log(`🔧 [SERVER] /api/auth middleware hit - Method: ${req.method}, Path: ${req.path}, Original: ${req.originalUrl}`);
+  next();
+}, validateSystemHealth, authRoutes);
+
+// Also register login route directly as a fallback (in case router doesn't work)
+const { login } = require("./controllers/authController");
+if (login) {
+  app.post("/api/auth/login", validateSystemHealth, login);
+  console.log("✅ [SERVER] Direct POST /api/auth/login route registered as fallback");
+}
+
+console.log("✅ [SERVER] /api/auth routes registered");
 app.use("/api/vendors", validateSystemHealth, vendorRoutes);
 app.use("/api/customers", validateSystemHealth, customerRoutes);
 app.use("/api/reports", reportRoutes);
@@ -105,8 +120,27 @@ app.use("/api/receipts", validateSystemHealth, receiptRoutes);
 app.use('/api/activities', validateSystemHealth, activityRoutes);
 app.use('/api/shortcuts', validateSystemHealth, shortcutRoutes);
 
+// Debug middleware to catch all unmatched routes before 404
+app.use((req, res, next) => {
+  if (req.originalUrl.includes('/api/auth/login') || req.path.includes('/api/auth/login')) {
+    console.log('⚠️ [404 DEBUG] Request reached 404 handler but should match /api/auth/login');
+    console.log('⚠️ [404 DEBUG] Method:', req.method);
+    console.log('⚠️ [404 DEBUG] Path:', req.path);
+    console.log('⚠️ [404 DEBUG] Original URL:', req.originalUrl);
+    console.log('⚠️ [404 DEBUG] Base URL:', req.baseUrl);
+    console.log('⚠️ [404 DEBUG] Registered routes:', app._router?.stack?.map(layer => {
+      if (layer.route) {
+        return `${Object.keys(layer.route.methods).join(', ').toUpperCase()} ${layer.route.path}`;
+      }
+      return 'Middleware';
+    }));
+  }
+  next();
+});
+
 // 404 Handler for unmatched routes
 app.use((req, res, next) => {
+  console.log(`❌ [404] Route not found: ${req.method} ${req.originalUrl || req.path}`);
   res.status(404).json({
     success: false,
     message: `Route ${req.method} ${req.originalUrl || req.path} not found`
