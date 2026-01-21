@@ -8,10 +8,23 @@ const jwt = require("jsonwebtoken");
 exports.login = async (req, res) => {
   try {
     console.log("➡️ [LOGIN] API endpoint hit.");
+    console.log("➡️ [LOGIN] Request body exists:", !!req.body);
+    console.log("➡️ [LOGIN] Request body type:", typeof req.body);
     console.log("➡️ [LOGIN] Request body:", JSON.stringify(req.body));
     console.log("➡️ [LOGIN] Content-Type:", req.headers['content-type']);
     console.log("➡️ [LOGIN] Path:", req.path);
     console.log("➡️ [LOGIN] Original URL:", req.originalUrl);
+    
+    // Check if body is empty or not parsed
+    if (!req.body || typeof req.body !== 'object' || Object.keys(req.body).length === 0) {
+      console.log("❌ [LOGIN] Request body is empty or not parsed.");
+      console.log("❌ [LOGIN] Raw body:", req.body);
+      return res.status(400).json({ 
+        success: false,
+        message: "Request body is required. Please send JSON with 'identifier' (or 'email'/'mobile') and 'password' fields.",
+        hint: "Make sure Content-Type header is set to 'application/json'"
+      });
+    }
     
     // Support both 'identifier' and 'email' for backward compatibility
     // Also support 'mobile' as an alternative
@@ -22,9 +35,17 @@ exports.login = async (req, res) => {
     if (!identifier || !password) {
       console.log("❌ [LOGIN] Missing identifier/email/mobile or password.");
       console.log("❌ [LOGIN] Received body keys:", Object.keys(req.body));
+      console.log("❌ [LOGIN] Body values:", {
+        identifier: req.body.identifier,
+        email: req.body.email,
+        mobile: req.body.mobile,
+        username: req.body.username,
+        password: req.body.password ? '***' : undefined
+      });
       return res.status(400).json({ 
         success: false,
-        message: "Please provide identifier (username or mobile) and password" 
+        message: "Please provide identifier (username or mobile) and password",
+        received: Object.keys(req.body)
       });
     }
 

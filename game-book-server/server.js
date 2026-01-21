@@ -17,8 +17,31 @@ const shortcutRoutes = require('./routes/shortcutRoutes');
 const app = express();
 
 // Enhanced body parsing with size limits and URL-encoded support
-app.use(express.json({ limit: '10mb', extended: true }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+// Add error handler for JSON parsing errors
+app.use(express.json({ 
+  limit: '10mb', 
+  extended: true,
+  strict: false // Allow non-strict JSON
+}));
+
+app.use(express.urlencoded({ 
+  limit: '10mb', 
+  extended: true 
+}));
+
+// Handle JSON parsing errors (must be after body parsers)
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+    console.error('❌ [BODY PARSER] JSON parsing error:', err.message);
+    console.error('❌ [BODY PARSER] Error stack:', err.stack);
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid JSON in request body. Please ensure your request body is valid JSON.',
+      error: err.message
+    });
+  }
+  next();
+});
 
 // CORS configuration
 app.use(cors({
