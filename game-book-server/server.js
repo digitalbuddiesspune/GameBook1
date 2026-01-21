@@ -99,18 +99,20 @@ if (authRoutes && authRoutes.stack) {
 // Use Routes - Login route should be accessible even if system health check fails
 console.log("🔧 [SERVER] Registering /api/auth routes...");
 
-// Register auth routes
+// Register login route directly FIRST (takes precedence, more reliable)
+const { login } = require("./controllers/authController");
+if (login) {
+  app.post("/api/auth/login", validateSystemHealth, login);
+  console.log("✅ [SERVER] Direct POST /api/auth/login route registered (primary)");
+} else {
+  console.error("❌ [SERVER] Login function not found!");
+}
+
+// Register auth routes (router - for other routes like /test)
 app.use("/api/auth", (req, res, next) => {
   console.log(`🔧 [SERVER] /api/auth middleware hit - Method: ${req.method}, Path: ${req.path}, Original: ${req.originalUrl}`);
   next();
 }, validateSystemHealth, authRoutes);
-
-// Also register login route directly as a fallback (in case router doesn't work)
-const { login } = require("./controllers/authController");
-if (login) {
-  app.post("/api/auth/login", validateSystemHealth, login);
-  console.log("✅ [SERVER] Direct POST /api/auth/login route registered as fallback");
-}
 
 console.log("✅ [SERVER] /api/auth routes registered");
 app.use("/api/vendors", validateSystemHealth, vendorRoutes);
