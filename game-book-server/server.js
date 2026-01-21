@@ -45,7 +45,31 @@ app.get("/", (req, res) => {
   res.send("🚀 Ping successful! The server is alive and responding.");
 });
 
-// Use Routes
+// Health check endpoint (no middleware, always accessible)
+app.get("/health", (req, res) => {
+  res.json({ 
+    success: true, 
+    message: "Server is healthy",
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Verify auth routes are loaded
+console.log("✅ Auth routes loaded:", authRoutes ? "Yes" : "No");
+if (authRoutes && authRoutes.stack) {
+  try {
+    const routesInfo = authRoutes.stack.map(r => {
+      const methods = r.route?.methods ? Object.keys(r.route.methods).join(', ').toUpperCase() : 'ALL';
+      const path = r.route?.path || (r.regexp ? r.regexp.toString() : 'unknown');
+      return `${methods} ${path}`;
+    });
+    console.log("✅ Auth routes stack:", routesInfo);
+  } catch (err) {
+    console.log("✅ Auth routes stack: (unable to parse)", err.message);
+  }
+}
+
+// Use Routes - Login route should be accessible even if system health check fails
 app.use("/api/auth", validateSystemHealth, authRoutes);
 app.use("/api/vendors", validateSystemHealth, vendorRoutes);
 app.use("/api/customers", validateSystemHealth, customerRoutes);

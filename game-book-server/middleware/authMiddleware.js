@@ -32,22 +32,30 @@ const protect = async (req, res, next) => {
 
 const validateSystemHealth = async (req, res, next) => {
   try {
-    // Skip system health check for login route to ensure it's always accessible
-    if (req.path === '/login' || req.path === '/api/auth/login') {
+    // Skip system health check for login and test routes to ensure they're always accessible
+    const path = req.path || req.originalUrl || '';
+    if (path.includes('/login') || path.includes('/test') || path === '/') {
       return next();
     }
 
-    let sysHealth = await SysHealth.findOne();
-    
-    if (!sysHealth) {
-      sysHealth = await SysHealth.create({ isEnabled: true });
-    }
+    // Try to check system health, but don't block if database is not ready
+    try {
+      let sysHealth = await SysHealth.findOne();
+      
+      if (!sysHealth) {
+        sysHealth = await SysHealth.create({ isEnabled: true });
+      }
 
-    if (!sysHealth.isEnabled) {
-      return res.status(503).json({
-        success: false,
-        message: sysHealth.reason || "App is currently under maintenance. Please try again later."
-      });
+      if (!sysHealth.isEnabled) {
+        return res.status(503).json({
+          success: false,
+          message: sysHealth.reason || "App is currently under maintenance. Please try again later."
+        });
+      }
+    } catch (dbError) {
+      // If database query fails, log but don't block the request
+      console.warn("System health check failed (database may not be ready):", dbError.message);
+      // Continue to next middleware - don't block routes if DB check fails
     }
 
     next();

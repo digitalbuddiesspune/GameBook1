@@ -10,6 +10,8 @@ exports.login = async (req, res) => {
     console.log("➡️ [LOGIN] API endpoint hit.");
     console.log("➡️ [LOGIN] Request body:", JSON.stringify(req.body));
     console.log("➡️ [LOGIN] Content-Type:", req.headers['content-type']);
+    console.log("➡️ [LOGIN] Path:", req.path);
+    console.log("➡️ [LOGIN] Original URL:", req.originalUrl);
     
     const { identifier, password } = req.body; // identifier can be username or mobile
 
@@ -26,17 +28,25 @@ exports.login = async (req, res) => {
     let userType = null;
     console.log("➡️ [LOGIN] Searching for user in database...");
 
-    // Auto-detect user type: try to find by username first (admin), then by mobile (vendor)
-    user = await User.findOne({ username: identifier, role: 'admin' });
-    
-    if (user) {
-      userType = 'admin';
-    } else {
-      // If not found as admin, try as vendor in Vendor collection
-      user = await Vendor.findOne({ mobile: identifier });
+    try {
+      // Auto-detect user type: try to find by username first (admin), then by mobile (vendor)
+      user = await User.findOne({ username: identifier, role: 'admin' });
+      
       if (user) {
-        userType = 'vendor';
+        userType = 'admin';
+      } else {
+        // If not found as admin, try as vendor in Vendor collection
+        user = await Vendor.findOne({ mobile: identifier });
+        if (user) {
+          userType = 'vendor';
+        }
       }
+    } catch (dbError) {
+      console.error("❌ [LOGIN] Database query error:", dbError.message);
+      return res.status(503).json({
+        success: false,
+        message: "Database connection error. Please try again later."
+      });
     }
 
     console.log("➡️ [LOGIN] Database search complete.");
