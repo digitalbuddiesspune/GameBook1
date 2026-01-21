@@ -28,11 +28,15 @@ app.use(cors({
 
 // Debugging middleware to log incoming requests
 app.use((req, res, next) => {
-  if (req.path === '/api/auth/login') {
+  if (req.path.includes('/api/auth')) {
     console.log('📥 [REQUEST] Method:', req.method);
     console.log('📥 [REQUEST] Path:', req.path);
+    console.log('📥 [REQUEST] Original URL:', req.originalUrl);
+    console.log('📥 [REQUEST] Base URL:', req.baseUrl);
     console.log('📥 [REQUEST] Headers:', JSON.stringify(req.headers));
-    console.log('📥 [REQUEST] Body:', JSON.stringify(req.body));
+    if (req.method === 'POST') {
+      console.log('📥 [REQUEST] Body:', JSON.stringify(req.body));
+    }
   }
   next();
 });
@@ -50,6 +54,23 @@ app.use("/api/receipts", validateSystemHealth, receiptRoutes);
 app.use('/api/activities', validateSystemHealth, activityRoutes);
 app.use('/api/shortcuts', validateSystemHealth, shortcutRoutes);
 
+// 404 Handler for unmatched routes
+app.use((req, res, next) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.method} ${req.originalUrl || req.path} not found`
+  });
+});
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error('Global error handler:', err);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
 
 const HOST = "0.0.0.0";
 const PORT = process.env.PORT || 5000;

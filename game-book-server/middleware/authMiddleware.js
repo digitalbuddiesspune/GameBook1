@@ -32,6 +32,11 @@ const protect = async (req, res, next) => {
 
 const validateSystemHealth = async (req, res, next) => {
   try {
+    // Skip system health check for login route to ensure it's always accessible
+    if (req.path === '/login' || req.path === '/api/auth/login') {
+      return next();
+    }
+
     let sysHealth = await SysHealth.findOne();
     
     if (!sysHealth) {
@@ -48,6 +53,7 @@ const validateSystemHealth = async (req, res, next) => {
     next();
   } catch (error) {
     console.error("System health validation error:", error);
+    // Always call next() even on error to prevent blocking routes
     next();
   }
 };
