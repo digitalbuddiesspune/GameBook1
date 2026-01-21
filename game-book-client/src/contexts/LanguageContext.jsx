@@ -1,4 +1,5 @@
-import { createContext, useEffect, useState } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import { createContext, useContext, useEffect, useState } from 'react';
 import enTranslations from '../locales/en.json';
 import mrTranslations from '../locales/mr.json';
 
@@ -61,6 +62,15 @@ export const LanguageProvider = ({ children }) => {
             {children}
         </LanguageContext.Provider>
     );
+};
+
+// Custom hook to use the Language context
+export const useLanguage = () => {
+    const context = useContext(LanguageContext);
+    if (!context) {
+        throw new Error('useLanguage must be used within a LanguageProvider');
+    }
+    return context;
 };
 
 export default LanguageContext;
