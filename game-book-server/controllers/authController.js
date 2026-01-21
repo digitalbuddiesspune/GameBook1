@@ -8,7 +8,19 @@ const jwt = require("jsonwebtoken");
 exports.login = async (req, res) => {
   try {
     console.log("➡️ [LOGIN] API endpoint hit.");
+    console.log("➡️ [LOGIN] Request body:", JSON.stringify(req.body));
+    console.log("➡️ [LOGIN] Content-Type:", req.headers['content-type']);
+    
     const { identifier, password } = req.body; // identifier can be username or mobile
+
+    // Validate that identifier and password are provided
+    if (!identifier || !password) {
+      console.log("❌ [LOGIN] Missing identifier or password.");
+      return res.status(400).json({ 
+        success: false,
+        message: "Please provide identifier (username or mobile) and password" 
+      });
+    }
 
     let user;
     let userType = null;
@@ -31,13 +43,17 @@ exports.login = async (req, res) => {
 
     if (!user) {
       console.log("❌ [LOGIN] User not found.");
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({ 
+        success: false,
+        message: "Invalid credentials" 
+      });
     }
     
     // Check vendor approval status
     if (userType === 'vendor' && user.status !== 'approved') {
       console.log(`❌ [LOGIN] Vendor account is ${user.status}.`);
       return res.status(403).json({ 
+        success: false,
         message: `Your account is ${user.status}. Please contact admin.`,
         status: user.status
       });
@@ -48,7 +64,10 @@ exports.login = async (req, res) => {
 
     if (!isMatch) {
       console.log("❌ [LOGIN] Password does not match.");
-      return res.status(401).json({ message: "Invalid credentials" });
+      return res.status(401).json({ 
+        success: false,
+        message: "Invalid credentials" 
+      });
     }
 
     console.log("✅ [LOGIN] Password match! Creating JWT...");
@@ -67,6 +86,7 @@ exports.login = async (req, res) => {
         if (err) throw err;
         console.log("✅ [LOGIN] Token created. Sending success response.");
         res.status(200).json({
+          success: true,
           message: "Login successful!",
           token,
           user: { 
@@ -81,6 +101,10 @@ exports.login = async (req, res) => {
     );
   } catch (err) {
     console.error("🔥 [LOGIN] A critical error occurred:", err.message);
-    res.status(500).json({ message: "Server error" });
+    console.error("🔥 [LOGIN] Error stack:", err.stack);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error" 
+    });
   }
 };

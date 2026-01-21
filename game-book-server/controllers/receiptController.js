@@ -152,14 +152,49 @@ const createReceipt = async (req, res) => {
     }
 };
 
-// @desc    Get all receipts for the logged-in vendor
-// @route   GET /api/receipts
-// @access  Private
+// @desc    Get all receipts for the logged-in vendor with pagination
+// @route   GET /api/receipts?page=1&limit=100
+// @access  Private
 const getAllReceipts = async (req, res) => {
     try {
-        // Find all receipts that belong to the currently logged-in vendor
-        const receipts = await Receipt.find({ vendorId: req.vendor.id }).sort({ date: -1 });
-        res.status(200).json({ receipts });
+        // Get pagination parameters from query string
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 100;
+        
+        // Validate pagination parameters
+        if (page < 1) {
+            return res.status(400).json({ message: "Page number must be greater than 0" });
+        }
+        if (limit < 1 || limit > 100) {
+            return res.status(400).json({ message: "Limit must be between 1 and 100" });
+        }
+
+        // Calculate skip value for pagination
+        const skip = (page - 1) * limit;
+
+        // Get total count of receipts for this vendor
+        const totalReceipts = await Receipt.countDocuments({ vendorId: req.vendor.id });
+        
+        // Calculate total pages
+        const totalPages = Math.ceil(totalReceipts / limit);
+
+        // Find receipts with pagination
+        const receipts = await Receipt.find({ vendorId: req.vendor.id })
+            .sort({ date: -1 })
+            .skip(skip)
+            .limit(limit);
+
+        res.status(200).json({
+            receipts,
+            pagination: {
+                currentPage: page,
+                totalPages,
+                totalReceipts,
+                limit,
+                hasNextPage: page < totalPages,
+                hasPrevPage: page > 1
+            }
+        });
     } catch (err) {
         console.error("Error fetching receipts:", err);
         res.status(500).json({ message: "Failed to fetch receipts" });

@@ -395,28 +395,63 @@ const ViewReceipts = () => {
   const [dateFilter, setDateFilter] = useState('all');
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalReceipts: 0,
+    limit: 100,
+    hasNextPage: false,
+    hasPrevPage: false
+  });
 
   const printRef = useRef();
+  const receiptsContainerRef = useRef(null);
   const token = localStorage.getItem("token");
   const navigate = useNavigate();
 
-  const fetchReceipts = useCallback(async () => {
+  const fetchReceipts = useCallback(async (page = 1) => {
     if (!token) {
       toast.error(t('auth.loginError'));
       return;
     }
     try {
+      setLoading(true);
       const res = await axios.get(`${API_BASE_URI}/api/receipts`, {
         headers: { Authorization: `Bearer ${token}` },
+        params: {
+          page: page,
+          limit: 100
+        }
       });
-      const sortedReceipts = (res.data.receipts || []).sort(
-        (a, b) => new Date(b.date) - new Date(a.date)
-      );
-      setReceipts(sortedReceipts);
+      
+      // Handle both old and new response formats for backward compatibility
+      if (res.data.pagination) {
+        // New paginated response
+        setReceipts(res.data.receipts || []);
+        setPagination(res.data.pagination);
+      } else {
+        // Old response format (fallback)
+        const sortedReceipts = (res.data.receipts || []).sort(
+          (a, b) => new Date(b.date) - new Date(a.date)
+        );
+        setReceipts(sortedReceipts);
+        setPagination({
+          currentPage: 1,
+          totalPages: 1,
+          totalReceipts: sortedReceipts.length,
+          limit: 100,
+          hasNextPage: false,
+          hasPrevPage: false
+        });
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || t('receipts.messages.deleteFailed'));
+    } finally {
+      setLoading(false);
     }
-  }, [token]);
+  }, [token, t]);
 
   const fetchCustomers = useCallback(async () => {
     if (!token) return;
@@ -441,10 +476,29 @@ const ViewReceipts = () => {
   }, [token]);
 
   useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchReceipts(), fetchCustomers()])
-      .finally(() => setLoading(false));
-  }, [fetchReceipts, fetchCustomers]);
+    Promise.all([fetchReceipts(currentPage), fetchCustomers()]);
+  }, [fetchReceipts, fetchCustomers, currentPage]);
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, dateFilter]);
+
+  // Scroll to top smoothly when page changes
+  useEffect(() => {
+    if (receiptsContainerRef.current) {
+      receiptsContainerRef.current.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'start' 
+      });
+    } else {
+      // Fallback to window scroll if ref is not available
+      window.scrollTo({ 
+        top: 0, 
+        behavior: 'smooth' 
+      });
+    }
+  }, [currentPage]);
 
   const handleDelete = async (receiptToDelete) => {
     if (
@@ -799,10 +853,17 @@ const ViewReceipts = () => {
           </div>
 
           {/* Receipts Display */}
-          <div className="bg-white rounded-xl shadow-md p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">
-              {t('receipts.title')} ({sortedReceipts.length})
-            </h2>
+          <div ref={receiptsContainerRef} className="bg-white rounded-xl shadow-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-800">
+                {t('receipts.title')} ({pagination.totalReceipts} total, showing {sortedReceipts.length} on this page)
+              </h2>
+              {pagination.totalPages > 1 && (
+                <div className="text-sm text-gray-600">
+                  Page {pagination.currentPage} of {pagination.totalPages}
+                </div>
+              )}
+            </div>
 
             {/* List View */}
             {viewMode === 'list' && (
@@ -1045,6 +1106,85 @@ const ViewReceipts = () => {
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {pagination.totalPages > 1 && (
+              <div className="mt-6 flex items-center justify-center gap-2 flex-wrap">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={!pagination.hasPrevPage}
+                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                    !pagination.hasPrevPage
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={!pagination.hasPrevPage}
+                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                    !pagination.hasPrevPage
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  Previous
+                </button>
+                
+                {/* Page Numbers */}
+                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (pagination.totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (pagination.currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (pagination.currentPage >= pagination.totalPages - 2) {
+                    pageNum = pagination.totalPages - 4 + i;
+                  } else {
+                    pageNum = pagination.currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`px-4 py-2 rounded-lg font-medium transition ${
+                        pagination.currentPage === pageNum
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(pagination.totalPages, prev + 1))}
+                  disabled={!pagination.hasNextPage}
+                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                    !pagination.hasNextPage
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setCurrentPage(pagination.totalPages)}
+                  disabled={!pagination.hasNextPage}
+                  className={`px-4 py-2 rounded-lg font-medium transition ${
+                    !pagination.hasNextPage
+                      ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                  }`}
+                >
+                  Last
+                </button>
               </div>
             )}
           </div>
