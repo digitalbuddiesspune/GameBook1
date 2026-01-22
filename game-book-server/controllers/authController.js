@@ -44,8 +44,8 @@ exports.login = async (req, res) => {
       });
       return res.status(400).json({ 
         success: false,
-        message: "Please provide identifier (username or mobile) and password",
-        received: Object.keys(req.body)
+        message: "Please provide your mobile number (or username) and password to login.",
+        hint: "For vendors: use your registered mobile number. For admin: use your username."
       });
     }
 
@@ -57,7 +57,7 @@ exports.login = async (req, res) => {
       console.log("❌ [LOGIN] Empty identifier or password after trimming.");
       return res.status(400).json({ 
         success: false,
-        message: "Please provide identifier (username or mobile) and password" 
+        message: "Mobile number (or username) and password cannot be empty. Please enter valid credentials." 
       });
     }
 
@@ -106,18 +106,33 @@ exports.login = async (req, res) => {
 
     if (!user) {
       console.log("❌ [LOGIN] User not found for identifier:", cleanIdentifier);
-      return res.status(401).json({ 
-        success: false,
-        message: "Invalid credentials" 
-      });
+      // Check if it looks like a mobile number (for vendor)
+      const looksLikeMobile = /^\d{10,}$/.test(cleanIdentifier.replace(/[\s\-\(\)]/g, ''));
+      if (looksLikeMobile) {
+        return res.status(401).json({ 
+          success: false,
+          message: "Vendor account not found. Please check your mobile number or contact admin for registration."
+        });
+      } else {
+        return res.status(401).json({ 
+          success: false,
+          message: "Invalid username or mobile number. Please check your credentials."
+        });
+      }
     }
     
     // Check vendor approval status
     if (userType === 'vendor' && user.status !== 'approved') {
       console.log(`❌ [LOGIN] Vendor account is ${user.status}.`);
+      const statusMessages = {
+        'pending': 'Your vendor account is pending approval. Please wait for admin approval or contact support.',
+        'rejected': 'Your vendor account has been rejected. Please contact admin for assistance.',
+        'suspended': 'Your vendor account has been suspended. Please contact admin to resolve this issue.',
+        'inactive': 'Your vendor account is inactive. Please contact admin to activate your account.'
+      };
       return res.status(403).json({ 
         success: false,
-        message: `Your account is ${user.status}. Please contact admin.`,
+        message: statusMessages[user.status] || `Your vendor account is ${user.status}. Please contact admin.`,
         status: user.status
       });
     }
@@ -127,9 +142,15 @@ exports.login = async (req, res) => {
     // Check if user has a password hash
     if (!user.password) {
       console.log("❌ [LOGIN] User has no password hash.");
+      if (userType === 'vendor') {
+        return res.status(401).json({ 
+          success: false,
+          message: "Vendor account password not set. Please contact admin to set your password."
+        });
+      }
       return res.status(401).json({ 
         success: false,
-        message: "Invalid credentials" 
+        message: "Account password not set. Please contact admin."
       });
     }
     
@@ -137,9 +158,15 @@ exports.login = async (req, res) => {
 
     if (!isMatch) {
       console.log("❌ [LOGIN] Password does not match.");
+      if (userType === 'vendor') {
+        return res.status(401).json({ 
+          success: false,
+          message: "Incorrect password. Please check your password or use 'Forgot Password' if available."
+        });
+      }
       return res.status(401).json({ 
         success: false,
-        message: "Invalid credentials" 
+        message: "Incorrect password. Please check your credentials."
       });
     }
 
