@@ -81,6 +81,7 @@ const PORT = process.env.PORT || 5009;
 connectDB().then(() => {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log("🔍 Server is running with version 2.0 of the login handler.");
   });
 });
 
