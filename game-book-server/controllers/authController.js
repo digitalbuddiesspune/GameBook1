@@ -11,7 +11,9 @@ const jwt = require("jsonwebtoken");
 exports.login = async (req, res) => {
   try {
     // Version identifier to ensure new code is running
+    // THIS IS VERSION 2.0 - If you see "Please provide email and password", old code is running!
     console.log("➡️ [LOGIN] ========== NEW LOGIN HANDLER v2.0 ==========");
+    console.log("➡️ [LOGIN] ========== VERSION 2.0 - UPDATED ERROR MESSAGES ==========");
     console.log("➡️ [LOGIN] API endpoint hit.");
     console.log("➡️ [LOGIN] Request body exists:", !!req.body);
     console.log("➡️ [LOGIN] Request body type:", typeof req.body);
@@ -33,7 +35,9 @@ exports.login = async (req, res) => {
       return res.status(400).json({ 
         success: false,
         message: "Please provide your mobile number (or username) and password to login.",
-        hint: "Make sure Content-Type header is set to 'application/json' and send: { identifier: 'your_mobile', password: 'your_password' }"
+        hint: "Make sure Content-Type header is set to 'application/json' and send: { identifier: 'your_mobile', password: 'your_password' }",
+        version: "2.0",
+        handler: "NEW_LOGIN_HANDLER_V2"
       });
     }
     
@@ -64,12 +68,15 @@ exports.login = async (req, res) => {
       });
       
       // NEVER return "email and password" - always use new message
+      // Add version identifier to verify new code is running
       return res.status(400).json({ 
         success: false,
         message: "Please provide your mobile number (or username) and password to login.",
         hint: "For vendors: use your registered mobile number. For admin: use your username.",
         receivedFields: Object.keys(req.body),
-        code: "MISSING_CREDENTIALS"
+        code: "MISSING_CREDENTIALS",
+        version: "2.0", // Version identifier to verify new code
+        handler: "NEW_LOGIN_HANDLER_V2" // Unique identifier
       });
     }
 

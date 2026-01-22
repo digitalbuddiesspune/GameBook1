@@ -28,6 +28,21 @@ router.get("/test", (req, res) => {
     message: "Auth routes are working",
     path: req.path,
     originalUrl: req.originalUrl,
+    timestamp: new Date().toISOString(),
+    version: "2.0",
+    handler: "NEW_LOGIN_HANDLER_V2"
+  });
+});
+
+// Version check endpoint
+router.get("/version", (req, res) => {
+  const { login } = require("../controllers/authController");
+  res.json({
+    success: true,
+    version: "2.0",
+    handler: "NEW_LOGIN_HANDLER_V2",
+    loginFunctionExists: !!login,
+    message: "If you see version 2.0, new code is running. Old code would not have this endpoint.",
     timestamp: new Date().toISOString()
   });
 });
