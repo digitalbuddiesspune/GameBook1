@@ -81,6 +81,16 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Test login route endpoint (before any middleware)
+app.post("/test-login-route", (req, res) => {
+  res.json({
+    success: true,
+    message: "Test login route is accessible",
+    body: req.body,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Code version verification endpoint
 app.get("/api/version-check", (req, res) => {
   const authControllerPath = require.resolve("./controllers/authController");
@@ -130,70 +140,81 @@ const { login } = require("./controllers/authController");
 
 // Verify we have the new version
 if (login) {
+  console.log("✅ [SERVER] Login function loaded");
+  console.log("✅ [SERVER] Login function name:", login.name);
+  
   // Check if this is the new version by checking the function source
   const loginSource = login.toString();
   if (loginSource.includes("NEW LOGIN HANDLER v2.0") || loginSource.includes("VERSION 2.0") || loginSource.includes("loginHandlerV2")) {
     console.log("✅ [SERVER] NEW VERSION 2.0 login handler detected!");
   } else {
-    console.warn("⚠️ [SERVER] OLD login handler detected - clearing cache and reloading...");
-    delete require.cache[require.resolve("./controllers/authController")];
-    const { login: freshLogin } = require("./controllers/authController");
-    if (freshLogin) {
-      app.post("/api/auth/login", validateSystemHealth, (req, res) => {
-        // Wrap to catch and fix any old error messages
-        const originalJson = res.json.bind(res);
-        res.json = function(data) {
-          if (data && data.message && data.message.includes("email and password")) {
-            console.error("🚨 [SERVER] OLD ERROR MESSAGE DETECTED! Overriding...");
-            data.message = "Please provide your mobile number (or username) and password to login.";
-            data.version = "2.0";
-            data.handler = "NEW_LOGIN_HANDLER_V2";
-            data.override = true;
-          }
-          return originalJson(data);
-        };
-        freshLogin(req, res);
-      });
-      console.log("✅ [SERVER] Fresh login handler loaded after cache clear");
-    }
+    console.warn("⚠️ [SERVER] Version check inconclusive, but proceeding...");
   }
   
-  // Wrap login handler to catch any old error messages
-  const wrappedLogin = (req, res) => {
-    const originalJson = res.json.bind(res);
-    res.json = function(data) {
-      if (data && typeof data === 'object' && data.message) {
-        // Replace any old error messages
-        if (data.message.includes("Please provide email and password") || 
-            data.message.includes("email and password")) {
-          console.error("🚨 [SERVER] OLD ERROR MESSAGE DETECTED IN RESPONSE! Overriding...");
-          data.message = "Please provide your mobile number (or username) and password to login.";
-          data.version = "2.0";
-          data.handler = "NEW_LOGIN_HANDLER_V2";
-          data.override = true;
-          data.originalMessage = data.message; // Keep for debugging
-        }
-      }
-      return originalJson(data);
-    };
-    login(req, res);
-  };
+  // Register the login route - SIMPLE and DIRECT
+  // Register login route - SIMPLE DIRECT REGISTRATION
+  const loginRoute = app.post("/api/auth/login", (req, res, next) => {
+    console.log("🎯 [LOGIN ROUTE] Direct route hit!");
+    console.log("🎯 [LOGIN ROUTE] Method:", req.method);
+    console.log("🎯 [LOGIN ROUTE] Path:", req.path);
+    console.log("🎯 [LOGIN ROUTE] Original URL:", req.originalUrl);
+    next();
+  }, validateSystemHealth, login);
   
-  app.post("/api/auth/login", validateSystemHealth, wrappedLogin);
   console.log("✅ [SERVER] Direct POST /api/auth/login route registered (primary)");
-  console.log("✅ [SERVER] Login function source length:", login.toString().length, "characters");
-  console.log("✅ [SERVER] Login function name:", login.name);
+  console.log("✅ [SERVER] Route path: /api/auth/login");
+  console.log("✅ [SERVER] Route object:", loginRoute ? "Exists" : "Missing");
+  
+  // Verify route is in the stack
+  setTimeout(() => {
+    const routeFound = app._router?.stack?.some(layer => {
+      if (layer.route && layer.route.path === '/api/auth/login' && layer.route.methods.post) {
+        console.log("✅ [SERVER] Login route verified in router stack!");
+        return true;
+      }
+      return false;
+    });
+    if (!routeFound) {
+      console.error("❌ [SERVER] WARNING: Login route NOT found in router stack!");
+    }
+  }, 100);
 } else {
   console.error("❌ [SERVER] Login function not found!");
+  // Register a fallback route so we know the route exists
+  app.post("/api/auth/login", (req, res) => {
+    console.error("❌ [LOGIN ROUTE] Login function not available!");
+    res.status(500).json({
+      success: false,
+      message: "Login handler not available. Please check server logs.",
+      routeExists: true
+    });
+  });
 }
 
 // Register auth routes (router - for other routes like /test)
+// IMPORTANT: This must come AFTER the direct login route registration
 app.use("/api/auth", (req, res, next) => {
   console.log(`🔧 [SERVER] /api/auth middleware hit - Method: ${req.method}, Path: ${req.path}, Original: ${req.originalUrl}`);
   next();
 }, validateSystemHealth, authRoutes);
 
 console.log("✅ [SERVER] /api/auth routes registered");
+
+// Log all registered routes for debugging
+setTimeout(() => {
+  console.log("📋 [SERVER] Registered routes summary:");
+  if (app._router && app._router.stack) {
+    app._router.stack.forEach((layer, index) => {
+      if (layer.route) {
+        const methods = Object.keys(layer.route.methods).join(', ').toUpperCase();
+        const path = layer.route.path;
+        console.log(`   ${index + 1}. ${methods} ${path}`);
+      } else if (layer.regexp) {
+        console.log(`   ${index + 1}. Middleware: ${layer.regexp.toString().substring(0, 50)}`);
+      }
+    });
+  }
+}, 1000);
 app.use("/api/vendors", validateSystemHealth, vendorRoutes);
 app.use("/api/customers", validateSystemHealth, customerRoutes);
 app.use("/api/reports", reportRoutes);
@@ -225,24 +246,66 @@ app.use((req, res, next) => {
 
 // Debug middleware to catch all unmatched routes before 404
 app.use((req, res, next) => {
-  if (req.originalUrl.includes('/api/auth/login') || req.path.includes('/api/auth/login')) {
+  if (req.originalUrl.includes('/api/auth/login') || req.path.includes('/api/auth/login') || req.originalUrl === '/api/auth/login') {
+    console.log('⚠️ [404 DEBUG] ========================================');
     console.log('⚠️ [404 DEBUG] Request reached 404 handler but should match /api/auth/login');
     console.log('⚠️ [404 DEBUG] Method:', req.method);
     console.log('⚠️ [404 DEBUG] Path:', req.path);
     console.log('⚠️ [404 DEBUG] Original URL:', req.originalUrl);
     console.log('⚠️ [404 DEBUG] Base URL:', req.baseUrl);
-    console.log('⚠️ [404 DEBUG] Registered routes:', app._router?.stack?.map(layer => {
-      if (layer.route) {
-        return `${Object.keys(layer.route.methods).join(', ').toUpperCase()} ${layer.route.path}`;
-      }
-      return 'Middleware';
-    }));
+    console.log('⚠️ [404 DEBUG] URL matches /api/auth/login:', req.originalUrl === '/api/auth/login' || req.originalUrl.includes('/api/auth/login'));
+    
+    // List all POST routes
+    const postRoutes = [];
+    if (app._router && app._router.stack) {
+      app._router.stack.forEach((layer) => {
+        if (layer.route && layer.route.methods && layer.route.methods.post) {
+          postRoutes.push(layer.route.path);
+        }
+      });
+    }
+    console.log('⚠️ [404 DEBUG] All POST routes:', postRoutes);
+    console.log('⚠️ [404 DEBUG] ========================================');
   }
   next();
 });
 
 // 404 Handler for unmatched routes
 app.use((req, res, next) => {
+  // Special handling for login route 404
+  if (req.method === 'POST' && (req.originalUrl === '/api/auth/login' || req.originalUrl.includes('/api/auth/login'))) {
+    console.error(`❌ [404] LOGIN ROUTE NOT FOUND!`);
+    console.error(`❌ [404] Method: ${req.method}`);
+    console.error(`❌ [404] Original URL: ${req.originalUrl}`);
+    console.error(`❌ [404] Path: ${req.path}`);
+    console.error(`❌ [404] This should NOT happen - login route should be registered!`);
+    
+    // List all registered routes
+    console.error(`❌ [404] Checking registered routes...`);
+    if (app._router && app._router.stack) {
+      const routes = [];
+      app._router.stack.forEach((layer, index) => {
+        if (layer.route) {
+          routes.push({
+            index,
+            methods: Object.keys(layer.route.methods),
+            path: layer.route.path,
+            fullPath: layer.route.path
+          });
+        }
+      });
+      console.error(`❌ [404] Registered routes:`, JSON.stringify(routes, null, 2));
+    }
+    
+    return res.status(404).json({
+      success: false,
+      message: `Route ${req.method} ${req.originalUrl || req.path} not found`,
+      error: "Login route not registered properly",
+      hint: "Check server logs for route registration",
+      version: "2.0"
+    });
+  }
+  
   console.log(`❌ [404] Route not found: ${req.method} ${req.originalUrl || req.path}`);
   res.status(404).json({
     success: false,
