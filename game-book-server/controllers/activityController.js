@@ -1,4 +1,4 @@
-const Activity = require('../models/Activity');
+import Activity from '../models/Activity.js';
 
 /**
  * @desc    Get recent activities for the logged-in vendor
@@ -19,6 +19,6 @@ const getRecentActivities = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   getRecentActivities,
 };

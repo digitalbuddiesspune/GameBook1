@@ -1,6 +1,6 @@
-const jwt = require("jsonwebtoken");
-const Vendor = require("../models/Vendor");
-const { SysHealth } = require("../models/Counter");
+import jwt from "jsonwebtoken";
+import Vendor from "../models/Vendor.js";
+import { SysHealth } from "../models/Counter.js";
 
 const protect = async (req, res, next) => {
   let token;
@@ -72,5 +72,5 @@ const validateSystemHealth = async (req, res, next) => {
   }
 };
 
-module.exports = { protect, validateSystemHealth };
+export { protect, validateSystemHealth };
 

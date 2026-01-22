@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 // NEW: Schema for simple {val1, val2} objects (used for 'gun')
 const simpleValueSchema = new mongoose.Schema({
@@ -94,4 +94,4 @@ const receiptSchema = new mongoose.Schema({
   timestamps: true, // Automatically adds createdAt and updatedAt fields
 });
 
-module.exports = mongoose.model("Receipt", receiptSchema);
+export default mongoose.model("Receipt", receiptSchema);

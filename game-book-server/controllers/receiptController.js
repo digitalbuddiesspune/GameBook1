@@ -95,9 +95,9 @@
 //   deleteReceipt,
 // };
 
-const Receipt = require("../models/Receipt");
+import Receipt from "../models/Receipt.js";
 // The Activity model is optional but good for logging changes.
-// const Activity = require('../models/Activity'); 
+// import Activity from '../models/Activity.js'; 
 
 // Helper to safely evaluate math expressions (e.g., "10+20") matching frontend logic
 const evaluateExpression = (expression) => {
@@ -394,7 +394,7 @@ const getDailyTotals = async (req, res) => {
     }
 };
 
-module.exports = {
+export {
     createReceipt,
     getAllReceipts,
     updateReceipt,

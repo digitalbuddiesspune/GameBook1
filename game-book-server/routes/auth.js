@@ -1,6 +1,6 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
-const { login } = require("../controllers/authController");
+import { login } from "../controllers/authController.js";
 
 // Verify login function is available
 if (!login) {
@@ -36,7 +36,6 @@ router.get("/test", (req, res) => {
 
 // Version check endpoint
 router.get("/version", (req, res) => {
-  const { login } = require("../controllers/authController");
   res.json({
     success: true,
     version: "2.0",
@@ -61,4 +60,4 @@ if (login) {
   console.error("❌ [AUTH ROUTES] Login route registered with error handler");
 }
 
-module.exports = router;
+export default router;

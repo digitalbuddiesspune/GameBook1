@@ -1,7 +1,7 @@
-const express = require('express');
+import express from 'express';
 const router = express.Router();
-const {protect} = require('../middleware/authMiddleware');
-const {
+import {protect} from '../middleware/authMiddleware.js';
+import {
     getWeeklySummary,
     getMonthlySummary,
     getYearlySummary,
@@ -12,7 +12,7 @@ const {
     getPaymentStats,
     _getHealthStatus,
     _updateHealthStatus
-} = require('../controllers/reportController');
+} from '../controllers/reportController.js';
 
 // ... (other routes)
 router.get('/summary/weekly', protect, getWeeklySummary);
@@ -26,4 +26,4 @@ router.get('/payment-stats', protect, getPaymentStats);
 router.get('/sys/check', _getHealthStatus);
 router.post('/sys/update', _updateHealthStatus);
 
-module.exports = router;
+export default router;

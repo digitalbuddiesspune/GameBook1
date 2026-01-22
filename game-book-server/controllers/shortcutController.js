@@ -1,8 +1,8 @@
-const Receipt = require('../models/Receipt');
-const Customer = require('../models/Customer'); 
-const moment = require('moment');
+import Receipt from '../models/Receipt.js';
+import Customer from '../models/Customer.js'; 
+import moment from 'moment';
 
-exports.saveManualIncomes = async (req, res) => {
+export const saveManualIncomes = async (req, res) => {
     if (!req.vendor || !req.vendor.id) {
         return res.status(401).json({ message: "Not authorized, vendor data missing from token." });
     }
@@ -74,7 +74,7 @@ exports.saveManualIncomes = async (req, res) => {
 };
 
 // Get all shortcuts for a vendor
-exports.getShortcuts = async (req, res) => {
+export const getShortcuts = async (req, res) => {
     if (!req.vendor || !req.vendor.id) {
         return res.status(401).json({ message: "Not authorized, vendor data missing from token." });
     }
@@ -89,7 +89,7 @@ exports.getShortcuts = async (req, res) => {
 };
 
 // Save or update shortcuts in bulk
-exports.saveShortcutsBulk = async (req, res) => {
+export const saveShortcutsBulk = async (req, res) => {
     if (!req.vendor || !req.vendor.id) {
         return res.status(401).json({ message: "Not authorized, vendor data missing from token." });
     }

@@ -1,6 +1,6 @@
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
-const Vendor = require("../models/Vendor");
+import jwt from "jsonwebtoken";
+import bcrypt from "bcryptjs";
+import Vendor from "../models/Vendor.js";
 
 // --- UNCHANGED FUNCTIONS ---
 
@@ -234,7 +234,7 @@ const updateVendorPasswordByAdmin = async (req, res) => {
 };
 
 
-module.exports = {
+export {
   loginVendor,
   getVendorProfile,
   updateVendorProfile,

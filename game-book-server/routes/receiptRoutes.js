@@ -1,13 +1,13 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
-const { protect } = require("../middleware/authMiddleware");
-const {
+import { protect } from "../middleware/authMiddleware.js";
+import {
     createReceipt,
     getAllReceipts,
     updateReceipt,
     deleteReceipt,
     getDailyTotals
-} = require("../controllers/receiptController");
+} from "../controllers/receiptController.js";
 
 // Matches GET request to /api/receipts/daily-totals to get daily totals by company
 router.get("/daily-totals", protect, getDailyTotals);
@@ -24,4 +24,4 @@ router.put("/:id", protect, updateReceipt);
 // Matches DELETE request to /api/receipts/:id to delete a specific receipt
 router.delete("/:id", protect, deleteReceipt);
 
-module.exports = router;
+export default router;

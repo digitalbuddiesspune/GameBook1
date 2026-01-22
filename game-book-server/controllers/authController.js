@@ -3,13 +3,13 @@
 // Date: 2024 - Fixed "Please provide email and password" issue
 // This version NEVER returns "email and password" error message
 
-const User = require("../models/User");
-const Vendor = require("../models/Vendor");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
+import User from "../models/User.js";
+import Vendor from "../models/Vendor.js";
+import bcrypt from "bcryptjs";
+import jwt from "jsonwebtoken";
 
 // VERSION 2.0 MARKER - This function signature is unique to v2.0
-exports.login = async function loginHandlerV2(req, res) {
+export const login = async function loginHandlerV2(req, res) {
   try {
     // Version identifier to ensure new code is running
     // THIS IS VERSION 2.0 - If you see "Please provide email and password", old code is running!

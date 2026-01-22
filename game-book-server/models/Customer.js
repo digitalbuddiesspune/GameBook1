@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const customerSchema = new mongoose.Schema(
   {
@@ -29,4 +29,4 @@ const customerSchema = new mongoose.Schema(
 // Ensures that for any given vendor, the srNo is unique.
 customerSchema.index({ vendorId: 1, srNo: 1 }, { unique: true });
 
-module.exports = mongoose.model("Customer", customerSchema);
+export default mongoose.model("Customer", customerSchema);

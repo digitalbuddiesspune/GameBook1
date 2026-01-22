@@ -1,8 +1,8 @@
-const Receipt = require('../models/Receipt');
-const Customer = require('../models/Customer');
-const { SysHealth } = require('../models/Counter');
-const moment = require('moment');
-const mongoose = require('mongoose');
+import Receipt from '../models/Receipt.js';
+import Customer from '../models/Customer.js';
+import { SysHealth } from '../models/Counter.js';
+import moment from 'moment';
+import mongoose from 'mongoose';
 
 /**
  * A helper function to calculate both total income and total profit for a given period.
@@ -316,7 +316,7 @@ const getPaymentStats = async (req, res) => {
 };
 
 // Export all functions to be used in the routes file
-module.exports = {
+export {
     getWeeklySummary,
     getMonthlySummary,
     getYearlySummary,

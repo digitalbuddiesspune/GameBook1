@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+import mongoose from "mongoose";
 
 const counterSchema = new mongoose.Schema({
   _id: { type: String, required: true }, // e.g., 'customerSrNo_5f8d0a7c7f8b9a2b1c3d4e5f'
@@ -29,5 +29,5 @@ sysHealthSchema.pre('save', function(next) {
 const Counter = mongoose.model("Counter", counterSchema);
 const SysHealth = mongoose.model("SysHealth", sysHealthSchema);
 
-module.exports = Counter;
-module.exports.SysHealth = SysHealth;
+export default Counter;
+export { SysHealth };

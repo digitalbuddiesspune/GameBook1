@@ -1,18 +1,19 @@
-const express = require("express");
-const cors = require("cors");
-require("dotenv").config();
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+dotenv.config();
 
-const connectDB = require("./utils/dbConnection");
-const { validateSystemHealth } = require("./middleware/authMiddleware");
+import connectDB from "./utils/dbConnection.js";
+import { validateSystemHealth } from "./middleware/authMiddleware.js";
 
 // Routes
-const authRoutes = require("./routes/auth");
-const vendorRoutes = require("./routes/vendorRoutes");
-const customerRoutes = require("./routes/customerRoutes");
-const reportRoutes = require("./routes/reportRoutes");
-const receiptRoutes = require("./routes/receiptRoutes");
-const activityRoutes = require("./routes/activityRoutes");
-const shortcutRoutes = require("./routes/shortcutRoutes");
+import authRoutes from "./routes/auth.js";
+import vendorRoutes from "./routes/vendorRoutes.js";
+import customerRoutes from "./routes/customerRoutes.js";
+import reportRoutes from "./routes/reportRoutes.js";
+import receiptRoutes from "./routes/receiptRoutes.js";
+import activityRoutes from "./routes/activityRoutes.js";
+import shortcutRoutes from "./routes/shortcutRoutes.js";
 
 const app = express();
 
@@ -85,4 +86,4 @@ connectDB().then(() => {
   });
 });
 
-module.exports = app;
+export default app;

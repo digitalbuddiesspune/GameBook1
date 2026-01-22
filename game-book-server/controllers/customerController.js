@@ -1,6 +1,6 @@
-const Customer = require('../models/Customer');
-const Activity = require('../models/Activity');
-const Receipt = require('../models/Receipt');
+import Customer from '../models/Customer.js';
+import Activity from '../models/Activity.js';
+import Receipt from '../models/Receipt.js';
 
 /**
  * @desc    Create a new customer
@@ -212,7 +212,7 @@ const updateCustomerBalance = async (req, res) => {
   }
 };
 
-module.exports = {
+export {
   createCustomer,
   getAllCustomers,
   updateCustomer,

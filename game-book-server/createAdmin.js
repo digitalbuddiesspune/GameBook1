@@ -1,7 +1,8 @@
-const mongoose = require("mongoose");
-const bcrypt = require("bcryptjs");
-require("dotenv").config();
-const User = require("./models/User"); // adjust path if needed
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
+import dotenv from "dotenv";
+dotenv.config();
+import User from "./models/User.js"; // adjust path if needed
 
 const createAdmin = async () => {
   try {

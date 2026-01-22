@@ -1,17 +1,17 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
 
 // Import all controller functions
-const {
+import {
   createCustomer,
   getAllCustomers,
   updateCustomer,
   deleteCustomer,
   updateCustomerBalance,
-} = require("../controllers/customerController");
+} from "../controllers/customerController.js";
 
 // Import your authentication middleware
-const { protect } = require("../middleware/authMiddleware"); // Make sure the path is correct
+import { protect } from "../middleware/authMiddleware.js"; // Make sure the path is correct
 
 // Apply the 'protect' middleware to all routes in this file
 router.use(protect);
@@ -30,4 +30,4 @@ router.route("/:id")
   .put(updateCustomer)
   .delete(deleteCustomer);
 
-module.exports = router;
+export default router;

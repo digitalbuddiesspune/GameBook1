@@ -1,7 +1,7 @@
-const express = require("express");
+import express from "express";
 const router = express.Router();
 
-const {
+import {
   loginVendor,
   getVendorProfile,
   updateVendorProfile,
@@ -11,10 +11,10 @@ const {
   updateVendorByAdmin,
   deleteVendorByAdmin,
   updateVendorPasswordByAdmin,
-} = require("../controllers/vendorController");
+} from "../controllers/vendorController.js";
 
 // Assuming you have middleware to protect routes and check for admin role
-const { protect, admin } = require("../middleware/authMiddleware");
+import { protect } from "../middleware/authMiddleware.js";
 
 
 // --- PUBLIC VENDOR ROUTES ---
@@ -42,4 +42,4 @@ router.route("/:id")
 router.put("/:id/password", updateVendorPasswordByAdmin); // Corresponds to savePassword
 
 
-module.exports = router;
+export default router;
