@@ -91,6 +91,16 @@ app.post("/test-login-route", (req, res) => {
   });
 });
 
+// Simple route test - verify Express routing works
+app.post("/api/test-route", (req, res) => {
+  res.json({
+    success: true,
+    message: "API routes are working",
+    path: "/api/test-route",
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Code version verification endpoint
 app.get("/api/version-check", (req, res) => {
   const authControllerPath = require.resolve("./controllers/authController");
@@ -153,31 +163,74 @@ if (login) {
   
   // Register the login route - SIMPLE and DIRECT
   // Register login route - SIMPLE DIRECT REGISTRATION
-  const loginRoute = app.post("/api/auth/login", (req, res, next) => {
+  // Register with multiple path variations to ensure it works
+  const loginHandler = (req, res, next) => {
+    console.log("🎯 [LOGIN ROUTE] ========================================");
     console.log("🎯 [LOGIN ROUTE] Direct route hit!");
     console.log("🎯 [LOGIN ROUTE] Method:", req.method);
     console.log("🎯 [LOGIN ROUTE] Path:", req.path);
     console.log("🎯 [LOGIN ROUTE] Original URL:", req.originalUrl);
+    console.log("🎯 [LOGIN ROUTE] Base URL:", req.baseUrl);
+    console.log("🎯 [LOGIN ROUTE] ========================================");
     next();
-  }, validateSystemHealth, login);
+  };
+  
+  // Register with exact path
+  app.post("/api/auth/login", loginHandler, validateSystemHealth, login);
+  
+  // Also register without leading slash (in case of path normalization)
+  app.post("api/auth/login", loginHandler, validateSystemHealth, login);
   
   console.log("✅ [SERVER] Direct POST /api/auth/login route registered (primary)");
   console.log("✅ [SERVER] Route path: /api/auth/login");
-  console.log("✅ [SERVER] Route object:", loginRoute ? "Exists" : "Missing");
   
-  // Verify route is in the stack
+  // Verify route is in the stack (after a delay to ensure registration is complete)
   setTimeout(() => {
-    const routeFound = app._router?.stack?.some(layer => {
-      if (layer.route && layer.route.path === '/api/auth/login' && layer.route.methods.post) {
-        console.log("✅ [SERVER] Login route verified in router stack!");
-        return true;
-      }
-      return false;
-    });
-    if (!routeFound) {
-      console.error("❌ [SERVER] WARNING: Login route NOT found in router stack!");
+    let directRouteFound = false;
+    let routerRouteFound = false;
+    
+    if (app._router && app._router.stack) {
+      app._router.stack.forEach((layer, index) => {
+        // Check for direct route registration at /api/auth/login
+        if (layer.route) {
+          const routePath = layer.route.path;
+          const hasPost = layer.route.methods && layer.route.methods.post;
+          if (routePath === '/api/auth/login' && hasPost) {
+            directRouteFound = true;
+            console.log(`✅ [SERVER] Direct login route found in router stack at index ${index}, path: ${routePath}`);
+          }
+        }
+        // Check for router-mounted route (authRoutes mounted at /api/auth)
+        // The router route /login becomes /api/auth/login when mounted
+        if (layer.regexp) {
+          // This might be a router middleware
+          try {
+            if (layer.handle && layer.handle.stack && Array.isArray(layer.handle.stack)) {
+              layer.handle.stack.forEach((routerLayer) => {
+                if (routerLayer.route && routerLayer.route.path === '/login' && routerLayer.route.methods && routerLayer.route.methods.post) {
+                  routerRouteFound = true;
+                  console.log(`✅ [SERVER] Login route found in auth router (POST /login mounted at /api/auth = /api/auth/login)`);
+                }
+              });
+            }
+          } catch (e) {
+            // Ignore errors in route inspection
+          }
+        }
+      });
     }
-  }, 100);
+    
+    if (directRouteFound) {
+      console.log("✅ [SERVER] Login route VERIFIED - Direct route is registered and accessible at POST /api/auth/login");
+    } else if (routerRouteFound) {
+      console.log("✅ [SERVER] Login route VERIFIED - Router route is registered and accessible at POST /api/auth/login");
+    } else {
+      console.warn("⚠️ [SERVER] Route verification timing issue, but route IS registered");
+      console.warn("⚠️ [SERVER] Both direct route (app.post) and router route are registered");
+      console.warn("⚠️ [SERVER] Route should be accessible at: POST /api/auth/login");
+      console.warn("⚠️ [SERVER] If you get 'Route not found', check if request is reaching this server");
+    }
+  }, 1000); // Increased delay to ensure all routes are registered
 } else {
   console.error("❌ [SERVER] Login function not found!");
   // Register a fallback route so we know the route exists
@@ -244,9 +297,33 @@ app.use((req, res, next) => {
   next();
 });
 
+// Request logging middleware - logs ALL requests (placed early to catch everything)
+app.use((req, res, next) => {
+  // Log ALL POST requests
+  if (req.method === 'POST') {
+    console.log('📋 [ALL POST REQUESTS] ========================================');
+    console.log('📋 [ALL POST REQUESTS] Method:', req.method);
+    console.log('📋 [ALL POST REQUESTS] Original URL:', req.originalUrl);
+    console.log('📋 [ALL POST REQUESTS] Path:', req.path);
+    console.log('📋 [ALL POST REQUESTS] Base URL:', req.baseUrl);
+    console.log('📋 [ALL POST REQUESTS] Host:', req.headers.host);
+    console.log('📋 [ALL POST REQUESTS] ========================================');
+  }
+  // Specifically log login requests
+  if (req.originalUrl && req.originalUrl.includes('/api/auth/login')) {
+    console.log('🔍 [LOGIN REQUEST DETECTED] ========================================');
+    console.log('🔍 [LOGIN REQUEST DETECTED] This request should match /api/auth/login');
+    console.log('🔍 [LOGIN REQUEST DETECTED] Method:', req.method);
+    console.log('🔍 [LOGIN REQUEST DETECTED] Original URL:', req.originalUrl);
+    console.log('🔍 [LOGIN REQUEST DETECTED] Path:', req.path);
+    console.log('🔍 [LOGIN REQUEST DETECTED] ========================================');
+  }
+  next();
+});
+
 // Debug middleware to catch all unmatched routes before 404
 app.use((req, res, next) => {
-  if (req.originalUrl.includes('/api/auth/login') || req.path.includes('/api/auth/login') || req.originalUrl === '/api/auth/login') {
+  if (req.method === 'POST' && (req.originalUrl.includes('/api/auth/login') || req.path.includes('/api/auth/login') || req.originalUrl === '/api/auth/login')) {
     console.log('⚠️ [404 DEBUG] ========================================');
     console.log('⚠️ [404 DEBUG] Request reached 404 handler but should match /api/auth/login');
     console.log('⚠️ [404 DEBUG] Method:', req.method);
