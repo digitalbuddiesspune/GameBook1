@@ -81,6 +81,28 @@ app.get("/health", (req, res) => {
   });
 });
 
+// Code version verification endpoint
+app.get("/api/version-check", (req, res) => {
+  const authControllerPath = require.resolve("./controllers/authController");
+  const fs = require("fs");
+  const authControllerCode = fs.readFileSync(authControllerPath, "utf8");
+  const hasV2 = authControllerCode.includes("NEW LOGIN HANDLER v2.0") || 
+                authControllerCode.includes("VERSION 2.0") ||
+                authControllerCode.includes("loginHandlerV2");
+  
+  res.json({
+    success: true,
+    version: hasV2 ? "2.0" : "UNKNOWN",
+    handler: hasV2 ? "NEW_LOGIN_HANDLER_V2" : "OLD_OR_UNKNOWN",
+    codeLoaded: hasV2,
+    message: hasV2 
+      ? "✅ Version 2.0 code is loaded! New error messages should work." 
+      : "❌ Version 2.0 code NOT detected! Old code may be cached.",
+    filePath: authControllerPath,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Verify auth routes are loaded
 console.log("✅ Auth routes loaded:", authRoutes ? "Yes" : "No");
 if (authRoutes && authRoutes.stack) {
@@ -99,11 +121,68 @@ if (authRoutes && authRoutes.stack) {
 // Use Routes - Login route should be accessible even if system health check fails
 console.log("🔧 [SERVER] Registering /api/auth routes...");
 
+// Clear require cache for authController to ensure fresh code is loaded
+delete require.cache[require.resolve("./controllers/authController")];
+delete require.cache[require.resolve("./routes/auth")];
+
 // Register login route directly FIRST (takes precedence, more reliable)
 const { login } = require("./controllers/authController");
+
+// Verify we have the new version
 if (login) {
-  app.post("/api/auth/login", validateSystemHealth, login);
+  // Check if this is the new version by checking the function source
+  const loginSource = login.toString();
+  if (loginSource.includes("NEW LOGIN HANDLER v2.0") || loginSource.includes("VERSION 2.0") || loginSource.includes("loginHandlerV2")) {
+    console.log("✅ [SERVER] NEW VERSION 2.0 login handler detected!");
+  } else {
+    console.warn("⚠️ [SERVER] OLD login handler detected - clearing cache and reloading...");
+    delete require.cache[require.resolve("./controllers/authController")];
+    const { login: freshLogin } = require("./controllers/authController");
+    if (freshLogin) {
+      app.post("/api/auth/login", validateSystemHealth, (req, res) => {
+        // Wrap to catch and fix any old error messages
+        const originalJson = res.json.bind(res);
+        res.json = function(data) {
+          if (data && data.message && data.message.includes("email and password")) {
+            console.error("🚨 [SERVER] OLD ERROR MESSAGE DETECTED! Overriding...");
+            data.message = "Please provide your mobile number (or username) and password to login.";
+            data.version = "2.0";
+            data.handler = "NEW_LOGIN_HANDLER_V2";
+            data.override = true;
+          }
+          return originalJson(data);
+        };
+        freshLogin(req, res);
+      });
+      console.log("✅ [SERVER] Fresh login handler loaded after cache clear");
+    }
+  }
+  
+  // Wrap login handler to catch any old error messages
+  const wrappedLogin = (req, res) => {
+    const originalJson = res.json.bind(res);
+    res.json = function(data) {
+      if (data && typeof data === 'object' && data.message) {
+        // Replace any old error messages
+        if (data.message.includes("Please provide email and password") || 
+            data.message.includes("email and password")) {
+          console.error("🚨 [SERVER] OLD ERROR MESSAGE DETECTED IN RESPONSE! Overriding...");
+          data.message = "Please provide your mobile number (or username) and password to login.";
+          data.version = "2.0";
+          data.handler = "NEW_LOGIN_HANDLER_V2";
+          data.override = true;
+          data.originalMessage = data.message; // Keep for debugging
+        }
+      }
+      return originalJson(data);
+    };
+    login(req, res);
+  };
+  
+  app.post("/api/auth/login", validateSystemHealth, wrappedLogin);
   console.log("✅ [SERVER] Direct POST /api/auth/login route registered (primary)");
+  console.log("✅ [SERVER] Login function source length:", login.toString().length, "characters");
+  console.log("✅ [SERVER] Login function name:", login.name);
 } else {
   console.error("❌ [SERVER] Login function not found!");
 }
@@ -121,6 +200,28 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/receipts", validateSystemHealth, receiptRoutes);
 app.use('/api/activities', validateSystemHealth, activityRoutes);
 app.use('/api/shortcuts', validateSystemHealth, shortcutRoutes);
+
+// Global response interceptor to catch and fix old error messages BEFORE 404
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+  res.json = function(data) {
+    if (data && typeof data === 'object' && data.message) {
+      // Replace any old error messages that might slip through
+      if (data.message.includes("Please provide email and password") || 
+          data.message.toLowerCase().includes("email and password")) {
+        console.error("🚨 [GLOBAL INTERCEPTOR] OLD ERROR MESSAGE DETECTED! Overriding...");
+        console.error("🚨 [GLOBAL INTERCEPTOR] Original message:", data.message);
+        data.message = "Please provide your mobile number (or username) and password to login.";
+        data.version = "2.0";
+        data.handler = "NEW_LOGIN_HANDLER_V2";
+        data.override = true;
+        data.originalMessage = data.message; // Keep for debugging
+      }
+    }
+    return originalJson(data);
+  };
+  next();
+});
 
 // Debug middleware to catch all unmatched routes before 404
 app.use((req, res, next) => {

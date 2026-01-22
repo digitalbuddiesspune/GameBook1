@@ -8,12 +8,14 @@ const Vendor = require("../models/Vendor");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
-exports.login = async (req, res) => {
+// VERSION 2.0 MARKER - This function signature is unique to v2.0
+exports.login = async function loginHandlerV2(req, res) {
   try {
     // Version identifier to ensure new code is running
     // THIS IS VERSION 2.0 - If you see "Please provide email and password", old code is running!
     console.log("➡️ [LOGIN] ========== NEW LOGIN HANDLER v2.0 ==========");
     console.log("➡️ [LOGIN] ========== VERSION 2.0 - UPDATED ERROR MESSAGES ==========");
+    console.log("➡️ [LOGIN] Function name:", loginHandlerV2.name);
     console.log("➡️ [LOGIN] API endpoint hit.");
     console.log("➡️ [LOGIN] Request body exists:", !!req.body);
     console.log("➡️ [LOGIN] Request body type:", typeof req.body);
