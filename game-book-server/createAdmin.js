@@ -55,3 +55,5 @@ const createAdmin = async () => {
 };
 
 createAdmin();
+
+// curl https://your-api-domain.com/

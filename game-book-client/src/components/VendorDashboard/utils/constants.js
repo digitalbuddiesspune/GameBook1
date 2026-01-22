@@ -9,7 +9,6 @@ export const MENU_ITEMS = [
   { key: "viewReceipts", label: "View Receipts", icon: "FaClipboardList" },
   { key: "customers", label: "Customers", icon: "FaUser" },
   { key: "reports", label: "Reports", icon: "FaCoins" },
-  { key: "logout", label: "Logout", icon: "FaSignOutAlt" },
 ];
 
 // Route mappings

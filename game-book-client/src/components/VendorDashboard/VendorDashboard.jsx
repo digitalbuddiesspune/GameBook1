@@ -67,28 +67,30 @@ const VendorDashboard = () => {
 
   // Logout handler
   const handleLogout = () => {
-    localStorage.clear();
-    window.location.replace("/");
+    // Clear all authentication data
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+    localStorage.removeItem("vendorId");
+    localStorage.removeItem("vendorProfile");
+    
+    // Redirect to login page
+    navigate("/", { replace: true });
   };
 
   // Menu click handler
   const handleMenuClick = (key) => {
-    if (key === "logout") {
-      handleLogout();
-    } else {
-      const routes = {
-        dashboard: '/vendor/dashboard',
-        profile: '/vendor/profile',
-        createReceipt: '/vendor/createReceipt',
-        viewReceipts: '/vendor/viewReceipts',
-        customers: '/vendor/customers',
-        shortcuts: '/vendor/shortcuts',
-        reports: '/vendor/reports'
-      };
-      
-      if (routes[key]) {
-        navigate(routes[key]);
-      }
+    const routes = {
+      dashboard: '/vendor/dashboard',
+      profile: '/vendor/profile',
+      createReceipt: '/vendor/createReceipt',
+      viewReceipts: '/vendor/viewReceipts',
+      customers: '/vendor/customers',
+      shortcuts: '/vendor/shortcuts',
+      reports: '/vendor/reports'
+    };
+    
+    if (routes[key]) {
+      navigate(routes[key]);
     }
     if (isMobileMenuOpen) {
       setIsMobileMenuOpen(false);

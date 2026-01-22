@@ -113,13 +113,17 @@ const SidebarNav = ({
             </div>
           )}
 
+          {/* Logout Button */}
           <button
             onClick={onLogout}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-all ${collapsed ? "justify-center" : ""
-              }`}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-red-600 hover:bg-red-50 hover:text-red-700 transition-all ${
+              collapsed ? "justify-center" : ""
+            }`}
           >
             <FaSignOutAlt className="text-lg" />
-            <span className={`text-sm ${collapsed ? "md:hidden" : ""}`}>{t('navigation.logout')}</span>
+            <span className={`text-sm ${collapsed ? "md:hidden" : ""}`}>
+              {t('navigation.logout')}
+            </span>
           </button>
         </div>
       </div>

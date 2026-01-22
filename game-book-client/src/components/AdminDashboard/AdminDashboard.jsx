@@ -229,20 +229,17 @@ const AdminDashboard = () => {
   const filteredVendors = vendors.filter((vendor) =>
     vendor.businessName.toLowerCase().includes(searchTerm.toLowerCase())
   );
-  
-  const handleLogout = () => {
-    const role = localStorage.getItem("role"); 
 
+  // Logout handler
+  const handleLogout = () => {
+    // Clear all authentication data
     localStorage.removeItem("token");
     localStorage.removeItem("role");
     localStorage.removeItem("vendorId");
     localStorage.removeItem("vendorProfile");
-
-    if (role === "admin") {
-      navigate("/", { replace: true });
-    } else if (role === "vendor") {
-      navigate("/vendor-login", { replace: true });
-    }
+    
+    // Redirect to login page
+    navigate("/", { replace: true });
   };
 
   return (
@@ -294,15 +291,17 @@ const AdminDashboard = () => {
         </nav>
 
         {/* Logout Button */}
-        <button
-          onClick={handleLogout}
-          className={`flex items-center gap-3 px-4 py-3 m-3 rounded-lg font-medium text-red-600 hover:bg-red-50 transition-all ${
-            collapsed ? "justify-center" : ""
-          }`}
-        >
-          <FaTimesCircle className="text-lg" />
-          {!collapsed && <span className="text-sm">Logout</span>}
-        </button>
+        <div className="p-3 border-t border-gray-200">
+          <button
+            onClick={handleLogout}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium text-red-600 hover:bg-red-50 transition-all ${
+              collapsed ? "justify-center" : ""
+            }`}
+          >
+            <FaTimesCircle className="text-lg" />
+            {!collapsed && <span className="text-sm">Logout</span>}
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}
