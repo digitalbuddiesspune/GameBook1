@@ -97,7 +97,7 @@ const getInitialFormData = (businessName, customerCompany = "") => {
 const getInitialGameRows = () => [
   {
     id: 1,
-    type: "आ.",
+    type: "ओ.",
     income: "",
     o: "",
     jod: "",
@@ -109,7 +109,7 @@ const getInitialGameRows = () => [
   },
   {
     id: 2,
-    type: "कु.",
+    type: "को.",
     income: "",
     o: "",
     jod: "",
@@ -1961,7 +1961,8 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
                   <td colSpan="6" className="border p-1 sm:p-1.5 md:p-2"></td>
                 </tr>
                 <tr>
-                  <td className="border p-1 sm:p-1.5 md:p-2 text-xs sm:text-sm md:text-base">टो.</td>
+                  <td className="border p-1 sm:p-1.5 md:p-2 text-xs sm:text-sm md:text-base">ए
+                    . टो.</td>
                   <td className="border p-1 sm:p-1.5 md:p-2 text-right text-xs sm:text-sm md:text-base font-semibold">
                     {calculationResults.totalDue.toFixed(2)}
                   </td>

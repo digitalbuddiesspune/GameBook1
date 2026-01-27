@@ -152,14 +152,17 @@ const createReceipt = async (req, res) => {
     }
 };
 
-// @desc    Get all receipts for the logged-in vendor with pagination
-// @route   GET /api/receipts?page=1&limit=100
+// @desc    Get all receipts for the logged-in vendor with pagination and optional date range
+// @route   GET /api/receipts?page=1&limit=100&dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD
 // @access  Private
 const getAllReceipts = async (req, res) => {
     try {
         // Get pagination parameters from query string
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 100;
+        
+        // Get date range parameters (optional)
+        const { dateFrom, dateTo } = req.query;
         
         // Validate pagination parameters
         if (page < 1) {
@@ -169,17 +172,37 @@ const getAllReceipts = async (req, res) => {
             return res.status(400).json({ message: "Limit must be between 1 and 100" });
         }
 
+        // Build query filter
+        const query = { vendorId: req.vendor.id };
+        
+        // Add date range filter if provided
+        if (dateFrom || dateTo) {
+            query.date = {};
+            
+            if (dateFrom) {
+                const startDate = new Date(dateFrom);
+                startDate.setHours(0, 0, 0, 0);
+                query.date.$gte = startDate;
+            }
+            
+            if (dateTo) {
+                const endDate = new Date(dateTo);
+                endDate.setHours(23, 59, 59, 999);
+                query.date.$lte = endDate;
+            }
+        }
+
         // Calculate skip value for pagination
         const skip = (page - 1) * limit;
 
-        // Get total count of receipts for this vendor
-        const totalReceipts = await Receipt.countDocuments({ vendorId: req.vendor.id });
+        // Get total count of receipts for this vendor (with date filter if applicable)
+        const totalReceipts = await Receipt.countDocuments(query);
         
         // Calculate total pages
         const totalPages = Math.ceil(totalReceipts / limit);
 
-        // Find receipts with pagination
-        const receipts = await Receipt.find({ vendorId: req.vendor.id })
+        // Find receipts with pagination and date filter
+        const receipts = await Receipt.find(query)
             .sort({ date: -1 })
             .skip(skip)
             .limit(limit);
@@ -193,7 +216,8 @@ const getAllReceipts = async (req, res) => {
                 limit,
                 hasNextPage: page < totalPages,
                 hasPrevPage: page > 1
-            }
+            },
+            dateRange: dateFrom || dateTo ? { dateFrom, dateTo } : null
         });
     } catch (err) {
         console.error("Error fetching receipts:", err);

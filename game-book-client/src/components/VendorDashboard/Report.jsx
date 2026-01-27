@@ -818,6 +818,11 @@ export default function ReportPage() {
   });
   const [dailyTotalsLoading, setDailyTotalsLoading] = useState(false);
 
+  // Date range states for CSV export
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [downloadingCSV, setDownloadingCSV] = useState(false);
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setSummaryLoading(true);
@@ -1055,6 +1060,132 @@ export default function ReportPage() {
     link.click();
     document.body.removeChild(link);
     toast.success("Downloaded all customers as CSV.");
+  };
+
+  // Download receipts CSV with date range
+  const handleDownloadReceiptsCSV = async () => {
+    if (!dateFrom || !dateTo) {
+      toast.warn("Please select both 'Date From' and 'Date To' to download receipts.");
+      return;
+    }
+
+    if (!token) {
+      toast.error("Authentication token not found.");
+      return;
+    }
+
+    setDownloadingCSV(true);
+    try {
+      // Fetch all receipts in the date range (we'll need to paginate through all)
+      let allReceipts = [];
+      let currentPage = 1;
+      let hasMore = true;
+
+      while (hasMore) {
+        const config = {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          params: {
+            page: currentPage,
+            limit: 100,
+            dateFrom: dateFrom,
+            dateTo: dateTo,
+          },
+        };
+
+        const response = await axios.get(`${API_BASE_URI}/api/receipts`, config);
+        const { receipts, pagination } = response.data;
+
+        allReceipts = allReceipts.concat(receipts);
+        
+        hasMore = pagination.hasNextPage;
+        currentPage++;
+      }
+
+      if (allReceipts.length === 0) {
+        toast.warn("No receipts found for the selected date range.");
+        setDownloadingCSV(false);
+        return;
+      }
+
+      // Prepare CSV headers
+      const headers = [
+        "Date",
+        "Customer Name",
+        "Customer Company",
+        "Total Income",
+        "Deduction",
+        "After Deduction",
+        "Payment",
+        "Remaining Balance",
+        "Final Total",
+      ];
+
+      // Prepare CSV rows
+      const rows = allReceipts.map((receipt) => {
+        const date = new Date(receipt.date).toLocaleDateString('en-IN', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric'
+        });
+        return [
+          date,
+          `"${receipt.customerName || ""}"`,
+          `"${receipt.customerCompany || ""}"`,
+          (receipt.totalIncome || 0).toFixed(2),
+          (receipt.deduction || 0).toFixed(2),
+          (receipt.afterDeduction || 0).toFixed(2),
+          (receipt.payment || 0).toFixed(2),
+          (receipt.remainingBalance || 0).toFixed(2),
+          (receipt.finalTotalAfterChuk || receipt.finalTotal || 0).toFixed(2),
+        ].join(",");
+      });
+
+      // Calculate totals
+      const totalIncome = allReceipts.reduce((sum, r) => sum + (r.totalIncome || 0), 0);
+      const totalDeduction = allReceipts.reduce((sum, r) => sum + (r.deduction || 0), 0);
+      const totalAfterDeduction = allReceipts.reduce((sum, r) => sum + (r.afterDeduction || 0), 0);
+      const totalPayment = allReceipts.reduce((sum, r) => sum + (r.payment || 0), 0);
+      const totalRemaining = allReceipts.reduce((sum, r) => sum + (r.remainingBalance || 0), 0);
+      const totalFinal = allReceipts.reduce((sum, r) => sum + (r.finalTotalAfterChuk || r.finalTotal || 0), 0);
+
+      // Add total row
+      const totalRow = [
+        "TOTAL",
+        "",
+        "",
+        totalIncome.toFixed(2),
+        totalDeduction.toFixed(2),
+        totalAfterDeduction.toFixed(2),
+        totalPayment.toFixed(2),
+        totalRemaining.toFixed(2),
+        totalFinal.toFixed(2),
+      ].join(",");
+      rows.push(totalRow);
+
+      // Create CSV content
+      const csvContent =
+        "data:text/csv;charset=utf-8,\uFEFF" +
+        [headers.join(","), ...rows].join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      const fileName = `receipts_${dateFrom}_to_${dateTo}.csv`;
+      link.setAttribute("download", fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success(`Downloaded ${allReceipts.length} receipts as CSV.`);
+    } catch (err) {
+      console.error("Failed to download receipts CSV:", err);
+      const errorMessage =
+        err.response?.data?.message ||
+        "Failed to download receipts. Please try again.";
+      toast.error(errorMessage);
+    } finally {
+      setDownloadingCSV(false);
+    }
   };
 
   const handlePrint = () => window.print();
@@ -1299,12 +1430,63 @@ export default function ReportPage() {
                         </button>
                       </div>
                     </div>
+                    
+                    {/* Date Range Selection for Receipts CSV Download */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex flex-col sm:flex-row gap-4 items-end">
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Select Date From
+                          </label>
+                          <div className="relative">
+                            <Calendar className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                            <input
+                              type="date"
+                              value={dateFrom}
+                              onChange={(e) => setDateFrom(e.target.value)}
+                              className="border border-gray-300 rounded-lg py-2 pl-10 pr-4 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Select Date To
+                          </label>
+                          <div className="relative">
+                            <Calendar className="absolute top-1/2 left-3 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                            <input
+                              type="date"
+                              value={dateTo}
+                              onChange={(e) => setDateTo(e.target.value)}
+                              min={dateFrom}
+                              className="border border-gray-300 rounded-lg py-2 pl-10 pr-4 w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          onClick={handleDownloadReceiptsCSV}
+                          disabled={downloadingCSV || !dateFrom || !dateTo}
+                          className="flex items-center justify-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                        >
+                          {downloadingCSV ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" /> Downloading...
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="w-4 h-4" /> Download Receipts CSV
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="flex flex-col sm:flex-row gap-2 w-full">
                       <button
                         onClick={handleExportCSV}
                         className="flex items-center justify-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-800 transition-colors text-sm font-medium shadow-sm w-full sm:w-auto"
                       >
-                        <FileText /> Export CSV
+                        <FileText /> Export Customer Balance CSV
                       </button>
                       <button
                         onClick={handlePrint}
