@@ -278,29 +278,44 @@ const deleteReceipt = async (req, res) => {
 };
 
 // @desc    Get daily totals grouped by company and game type
-// @route   GET /api/receipts/daily-totals?date=YYYY-MM-DD
+// @route   GET /api/receipts/daily-totals?date=YYYY-MM-DD OR ?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD
 // @access  Private
 const getDailyTotals = async (req, res) => {
     try {
-        const { date } = req.query;
+        const { date, dateFrom, dateTo } = req.query;
 
-        if (!date) {
-            return res.status(400).json({ message: "Date parameter is required (format: YYYY-MM-DD)" });
+        let startDate, endDate;
+
+        // Support both single date and date range
+        if (date) {
+            // Single date mode (backward compatible)
+            startDate = new Date(date);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(date);
+            endDate.setHours(23, 59, 59, 999);
+        } else if (dateFrom && dateTo) {
+            // Date range mode
+            startDate = new Date(dateFrom);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(dateTo);
+            endDate.setHours(23, 59, 59, 999);
+        } else {
+            return res.status(400).json({ 
+                message: "Either 'date' parameter (YYYY-MM-DD) or both 'dateFrom' and 'dateTo' parameters (YYYY-MM-DD) are required" 
+            });
         }
 
-        // Parse the date to get start and end of day
-        const startOfDay = new Date(date);
-        startOfDay.setHours(0, 0, 0, 0);
+        // Validate date range
+        if (startDate > endDate) {
+            return res.status(400).json({ message: "Start date must be before or equal to end date" });
+        }
 
-        const endOfDay = new Date(date);
-        endOfDay.setHours(23, 59, 59, 999);
-
-        // Find all receipts for this vendor on the specified date
+        // Find all receipts for this vendor in the specified date range
         const receipts = await Receipt.find({
             vendorId: req.vendor.id,
             date: {
-                $gte: startOfDay,
-                $lte: endOfDay
+                $gte: startDate,
+                $lte: endDate
             }
         });
 
@@ -408,7 +423,9 @@ const getDailyTotals = async (req, res) => {
         });
 
         res.status(200).json({
-            date,
+            date: date || null, // For backward compatibility
+            dateFrom: dateFrom || null,
+            dateTo: dateTo || null,
             totalsByCompany,
             grandTotals
         });

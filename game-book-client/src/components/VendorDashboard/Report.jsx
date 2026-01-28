@@ -810,15 +810,25 @@ export default function ReportPage() {
   const [paymentStats, setPaymentStats] = useState(null);
   const [chartsLoading, setChartsLoading] = useState(true);
 
-  // Daily Summary states
+  // Daily Summary states - using date range for Overview
   const [dailyTotals, setDailyTotals] = useState(null);
+  const [overviewDateFrom, setOverviewDateFrom] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // YYYY-MM-DD format - default to today
+  });
+  const [overviewDateTo, setOverviewDateTo] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split('T')[0]; // YYYY-MM-DD format - default to today
+  });
+  const [dailyTotalsLoading, setDailyTotalsLoading] = useState(false);
+  
+  // Separate date state for Daily Summary tab (single date)
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split('T')[0]; // YYYY-MM-DD format
   });
-  const [dailyTotalsLoading, setDailyTotalsLoading] = useState(false);
 
-  // Date range states for CSV export
+  // Date range states for CSV export (separate from Overview date range)
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [downloadingCSV, setDownloadingCSV] = useState(false);
@@ -931,7 +941,7 @@ export default function ReportPage() {
     }
   };
 
-  const fetchDailyTotals = useCallback(async (date) => {
+  const fetchDailyTotals = useCallback(async (dateFrom, dateTo, singleDate = null) => {
     if (!token) return;
 
     setDailyTotalsLoading(true);
@@ -940,7 +950,9 @@ export default function ReportPage() {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        params: { date },
+        params: singleDate 
+          ? { date: singleDate } // Single date mode (for Daily Summary tab)
+          : { dateFrom: dateFrom, dateTo: dateTo } // Date range mode (for Overview tab)
       };
 
       const res = await axios.get(`${API_BASE_URI}/api/receipts/daily-totals`, config);
@@ -953,10 +965,21 @@ export default function ReportPage() {
     }
   }, [token]);
 
-  // Fetch daily totals when date changes
+  // Fetch daily totals when date range changes (Overview tab)
   useEffect(() => {
-    if (activeTab === 'daily-summary' || activeTab === 'overview') {
-      fetchDailyTotals(selectedDate);
+    if (activeTab === 'overview') {
+      if (overviewDateFrom && overviewDateTo) {
+        fetchDailyTotals(overviewDateFrom, overviewDateTo);
+      }
+    }
+  }, [overviewDateFrom, overviewDateTo, activeTab, fetchDailyTotals]);
+
+  // Fetch daily totals when single date changes (Daily Summary tab)
+  useEffect(() => {
+    if (activeTab === 'daily-summary') {
+      if (selectedDate) {
+        fetchDailyTotals(null, null, selectedDate);
+      }
     }
   }, [selectedDate, activeTab, fetchDailyTotals]);
 
@@ -1287,31 +1310,55 @@ export default function ReportPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <Loader2 className="w-6 h-6 animate-spin" />
-                        <p className="opacity-90">Loading daily summary...</p>
+                        <p className="opacity-90">Loading summary...</p>
                       </div>
-                      <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="px-3 py-1 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="date"
+                          value={overviewDateFrom}
+                          onChange={(e) => setOverviewDateFrom(e.target.value)}
+                          className="px-3 py-1 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer"
+                        />
+                        <span className="text-white opacity-75">to</span>
+                        <input
+                          type="date"
+                          value={overviewDateTo}
+                          onChange={(e) => setOverviewDateTo(e.target.value)}
+                          min={overviewDateFrom}
+                          className="px-3 py-1 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer"
+                        />
+                      </div>
                     </div>
                   ) : dailyTotals ? (
                     <>
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                         <div>
-                          <div className="flex items-center gap-3 mb-1">
+                          <div className="flex items-center gap-3 mb-1 flex-wrap">
                             <h3 className="text-lg font-semibold opacity-90">
-                              {new Date(selectedDate).toDateString() === new Date().toDateString() ? "Today Summary" : "Daily Summary"}
+                              {overviewDateFrom === overviewDateTo 
+                                ? (new Date(overviewDateFrom).toDateString() === new Date().toDateString() 
+                                    ? "Today Summary" 
+                                    : "Daily Summary")
+                                : "Date Range Summary"}
                             </h3>
-                            <span className="text-xs bg-white/20 px-2 py-0.5 rounded">
-                              {new Date(selectedDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs bg-white/20 px-2 py-0.5 rounded">
+                                {new Date(overviewDateFrom).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                              </span>
+                              {overviewDateFrom !== overviewDateTo && (
+                                <>
+                                  <span className="text-xs opacity-75">to</span>
+                                  <span className="text-xs bg-white/20 px-2 py-0.5 rounded">
+                                    {new Date(overviewDateTo).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                                  </span>
+                                </>
+                              )}
+                            </div>
                           </div>
                           <p className="text-xs opacity-75">Combined total (Income + Payment)</p>
                         </div>
 
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4 flex-wrap">
                           {/* Grand Total Counts */}
                           <div className="flex gap-4 text-right sm:text-center mr-2">
                             <div>
@@ -1330,12 +1377,24 @@ export default function ReportPage() {
                               ₹{(dailyTotals.grandTotals.totalIncome + dailyTotals.grandTotals.totalPayment).toFixed(2)}
                             </p>
                           </div>
-                          <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            className="px-3 py-2 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer shadow-sm"
-                          />
+                          
+                          {/* Date Range Inputs */}
+                          <div className="flex gap-2 items-center">
+                            <input
+                              type="date"
+                              value={overviewDateFrom}
+                              onChange={(e) => setOverviewDateFrom(e.target.value)}
+                              className="px-3 py-2 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer shadow-sm"
+                            />
+                            <span className="text-white opacity-75 text-sm">to</span>
+                            <input
+                              type="date"
+                              value={overviewDateTo}
+                              onChange={(e) => setOverviewDateTo(e.target.value)}
+                              min={overviewDateFrom}
+                              className="px-3 py-2 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer shadow-sm"
+                            />
+                          </div>
                         </div>
                       </div>
 
@@ -1379,13 +1438,23 @@ export default function ReportPage() {
                     </>
                   ) : (
                     <div className="text-center py-6">
-                      <p className="opacity-75">Select a date to view summary</p>
-                      <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        className="mt-2 px-3 py-1 text-slate-800 text-sm rounded"
-                      />
+                      <p className="opacity-75 mb-4">Select date range to view summary</p>
+                      <div className="flex gap-2 justify-center items-center">
+                        <input
+                          type="date"
+                          value={overviewDateFrom}
+                          onChange={(e) => setOverviewDateFrom(e.target.value)}
+                          className="px-3 py-2 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer"
+                        />
+                        <span className="text-white opacity-75">to</span>
+                        <input
+                          type="date"
+                          value={overviewDateTo}
+                          onChange={(e) => setOverviewDateTo(e.target.value)}
+                          min={overviewDateFrom}
+                          className="px-3 py-2 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>
