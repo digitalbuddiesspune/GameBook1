@@ -258,14 +258,42 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
 
       setReceipts(fetchedReceipts);
 
-      if (!formData._id) {
+      // Only load latest open/close from today if no customer is selected and not editing
+      if (!formData._id && !formData.customerId) {
         const latestOpenClose = fetchLatestOpenCloseValues(fetchedReceipts);
         setOpenCloseValues(latestOpenClose);
+      } else if (!formData._id && formData.customerId) {
+        // If customer is selected, load their latest receipt's open/close values
+        const customerReceipts = fetchedReceipts.filter(
+          (r) => r.customerId === formData.customerId
+        );
+        
+        if (customerReceipts.length > 0) {
+          // Sort receipts to find the most recent one
+          customerReceipts.sort((a, b) => {
+            const dateA = dayjs(a.date);
+            const dateB = dayjs(b.date);
+            const dateDiff = dateB.diff(dateA);
+            if (dateDiff !== 0) return dateDiff;
+            if (b._id > a._id) return 1;
+            if (a._id < b._id) return -1;
+            return 0;
+          });
+          
+          const latestReceipt = customerReceipts[0];
+          if (latestReceipt.openCloseValues) {
+            setOpenCloseValues({
+              open: latestReceipt.openCloseValues.open || "",
+              close: latestReceipt.openCloseValues.close || "",
+              jod: latestReceipt.openCloseValues.jod || "",
+            });
+          }
+        }
       }
     } catch (error) {
       toast.error("Failed to load saved receipts.");
     }
-  }, [token, formData._id, fetchLatestOpenCloseValues]);
+  }, [token, formData._id, formData.customerId, fetchLatestOpenCloseValues]);
 
   useEffect(() => {
     fetchCustomers();
@@ -458,25 +486,49 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
             lastAdvanceAmount = latestReceipt.finalTotal.toString();
           }
 
+          // --- NEW: Load open/close values from customer's latest receipt ---
+          if (latestReceipt.openCloseValues) {
+            setOpenCloseValues({
+              open: latestReceipt.openCloseValues.open || "",
+              close: latestReceipt.openCloseValues.close || "",
+              jod: latestReceipt.openCloseValues.jod || "",
+            });
+          } else {
+            // If no openCloseValues in receipt, set to initial (empty) values
+            setOpenCloseValues(initialOpenCloseValues);
+          }
+
           // --- REMOVED: Logic to load cutting amount removed ---
           // lastCuttingAmount = latestReceipt.cuttingAmount?.toString() || "";
 
           // --- REMOVED (REQUEST 1): Logic to load aa/ku income removed ---
+        } else {
+          // No receipts for this customer - set to initial (empty) values
+          setOpenCloseValues(initialOpenCloseValues);
         }
 
         // Set the form data
-        setFormData((prev) => ({
-          ...prev,
-          customerId: customer._id,
-          customerName: customer.name,
-          pendingAmount: lastPendingAmount,
-          advanceAmount: lastAdvanceAmount,
-          cuttingAmount: lastCuttingAmount, // --- MODIFIED: This will be ""
-          jama: "", // --- CRITICAL FIX: Reset jama to empty ---
-          chuk: "", // Reset chuk
-          chukPercentage: "10", // Reset chuk percentage
-          isChukEnabled: false, // Reset chuk checkbox
-        }));
+        setFormData((prev) => {
+          const updated = {
+            ...prev,
+            customerId: customer._id,
+            customerName: customer.name,
+            pendingAmount: lastPendingAmount,
+            advanceAmount: lastAdvanceAmount,
+            cuttingAmount: lastCuttingAmount, // --- MODIFIED: This will be ""
+            jama: "", // --- CRITICAL FIX: Reset jama to empty ---
+            chuk: "", // Reset chuk
+            chukPercentage: "10", // Reset chuk percentage
+            isChukEnabled: false, // Reset chuk checkbox
+          };
+          
+          // If company is already set, load saved game rows
+          if (updated.customerCompany) {
+            setTimeout(() => loadSavedGameRows(updated.customerCompany), 100);
+          }
+          
+          return updated;
+        });
         // --- UPDATED: Use the new game rows ---
         setGameRows(newGameRows); // This will be getInitialGameRows()
       }
@@ -502,6 +554,54 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
 
     // --- FIX: Add 'receipts' to dependency array ---
   }, [serialNumberInput, customerList, receipts]);
+
+  // --- NEW: Update open/close values when receipts load if customer is already selected ---
+  useEffect(() => {
+    // Only run if customer is selected, receipts are loaded, and not editing
+    if (isEditingRef.current || !formData.customerId) {
+      return;
+    }
+
+    // If receipts are not loaded yet, wait
+    if (receipts.length === 0) {
+      return;
+    }
+
+    // Find all receipts for this customer
+    const customerReceipts = receipts.filter(
+      (r) => r.customerId === formData.customerId
+    );
+
+    if (customerReceipts.length > 0) {
+      // Sort receipts to find the most recent one
+      customerReceipts.sort((a, b) => {
+        const dateA = dayjs(a.date);
+        const dateB = dayjs(b.date);
+        const dateDiff = dateB.diff(dateA);
+        if (dateDiff !== 0) return dateDiff;
+        if (b._id > a._id) return 1;
+        if (a._id < b._id) return -1;
+        return 0;
+      });
+      
+      const latestReceipt = customerReceipts[0];
+      
+      // Load open/close values from customer's latest receipt
+      if (latestReceipt.openCloseValues) {
+        setOpenCloseValues({
+          open: latestReceipt.openCloseValues.open || "",
+          close: latestReceipt.openCloseValues.close || "",
+          jod: latestReceipt.openCloseValues.jod || "",
+        });
+      } else {
+        // If no openCloseValues, set to initial (empty) values
+        setOpenCloseValues(initialOpenCloseValues);
+      }
+    } else {
+      // No receipts for this customer - set to initial values
+      setOpenCloseValues(initialOpenCloseValues);
+    }
+  }, [receipts, formData.customerId]);
 
   // --- UPDATED: Click-outside handler for BOTH dropdowns ---
   useEffect(() => {
@@ -540,6 +640,103 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
       }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
+      
+      // If company is changed, check for saved game rows and auto-fill
+      if (name === "customerCompany" && value) {
+        loadSavedGameRows(value);
+      }
+    }
+  };
+
+  // Load saved game rows from API when company is selected (per customer)
+  const loadSavedGameRows = async (companyName) => {
+    try {
+      if (!formData.customerId) return; // Need customer ID to load per-customer data
+
+      const currentDay = dayjs().format("YYYY-MM-DD");
+      
+      // Load from API
+      const response = await axios.get(
+        `${API_BASE_URI}/api/market-details/${formData.customerId}/${encodeURIComponent(companyName)}/${currentDay}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!response.data.success || !response.data.marketDetails) {
+        return; // No saved data found
+      }
+
+      const marketData = response.data.marketDetails;
+
+      // Get saved game rows for this customer
+      const savedOpenRow = marketData.gameRowOpen;
+      const savedCloseRow = marketData.gameRowClose;
+
+      if (savedOpenRow || savedCloseRow) {
+        // Update game rows with saved data
+        setGameRows((prevRows) => {
+          const updatedRows = prevRows.length > 0 ? [...prevRows] : getInitialGameRows();
+          
+          // Find and update ओ. (आ.) type row
+          if (savedOpenRow) {
+            const openRowIndex = updatedRows.findIndex(
+              row => row.type === 'ओ.' || row.type === 'आ.'
+            );
+            if (openRowIndex !== -1) {
+              updatedRows[openRowIndex] = {
+                ...updatedRows[openRowIndex],
+                ...savedOpenRow,
+                id: updatedRows[openRowIndex].id, // Preserve existing id
+                type: updatedRows[openRowIndex].type, // Preserve type
+              };
+            } else {
+              // Add new row if not found
+              updatedRows.push({
+                id: Date.now(),
+                type: 'आ.',
+                multiplier: 8,
+                pan: { val1: '', val2: '', type: 'sp' },
+                gun: { val1: '', val2: '' },
+                special: { type: 'jackpot', val1: '', val2: '' },
+                ...savedOpenRow,
+              });
+            }
+          }
+
+          // Find and update को. (कु.) type row
+          if (savedCloseRow) {
+            const closeRowIndex = updatedRows.findIndex(
+              row => row.type === 'को.' || row.type === 'कु.'
+            );
+            if (closeRowIndex !== -1) {
+              updatedRows[closeRowIndex] = {
+                ...updatedRows[closeRowIndex],
+                ...savedCloseRow,
+                id: updatedRows[closeRowIndex].id, // Preserve existing id
+                type: updatedRows[closeRowIndex].type, // Preserve type
+              };
+            } else {
+              // Add new row if not found
+              updatedRows.push({
+                id: Date.now() + 1,
+                type: 'कु.',
+                multiplier: 9,
+                pan: { val1: '', val2: '', type: 'sp' },
+                gun: { val1: '', val2: '' },
+                special: { type: 'jackpot', val1: '', val2: '' },
+                ...savedCloseRow,
+              });
+            }
+          }
+
+          return updatedRows;
+        });
+
+        toast.success(`Auto-filled saved game rows for ${companyName}`);
+      }
+    } catch (err) {
+      console.error('Error loading saved game rows:', err);
     }
   };
 

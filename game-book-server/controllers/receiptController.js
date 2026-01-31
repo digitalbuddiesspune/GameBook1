@@ -319,116 +319,162 @@ const getDailyTotals = async (req, res) => {
             }
         });
 
-        // Group receipts by company and calculate totals
-        const totalsByCompany = {};
-        const uniqueCustomers = new Set();
+        // Helper function to process receipts and calculate totals
+        const processReceipts = (receiptsToProcess) => {
+            const totalsByCompany = {};
+            const uniqueCustomers = new Set();
 
-        receipts.forEach(receipt => {
-            const company = receipt.customerCompany || "No Company";
+            receiptsToProcess.forEach(receipt => {
+                const company = receipt.customerCompany || "No Company";
 
-            if (!totalsByCompany[company]) {
-                totalsByCompany[company] = {
-                    totalIncome: 0,
-                    totalPayment: 0,
-                    customerCount: 0,
-                    receiptsCount: 0,
-                    customers: new Set(),
-                    gameTypeBreakdown: {} // Game type breakdown
-                };
-            }
+                if (!totalsByCompany[company]) {
+                    totalsByCompany[company] = {
+                        totalIncome: 0,
+                        totalPayment: 0,
+                        customerCount: 0,
+                        receiptsCount: 0,
+                        customers: new Set(),
+                        gameTypeBreakdown: {} // Game type breakdown
+                    };
+                }
 
-            // Add to company totals
-            totalsByCompany[company].totalIncome += receipt.totalIncome || 0;
-            totalsByCompany[company].totalPayment += receipt.payment || 0;
-            totalsByCompany[company].receiptsCount += 1;
-            totalsByCompany[company].customers.add(receipt.customerId);
+                // Add to company totals
+                totalsByCompany[company].totalIncome += receipt.totalIncome || 0;
+                totalsByCompany[company].totalPayment += receipt.payment || 0;
+                totalsByCompany[company].receiptsCount += 1;
+                totalsByCompany[company].customers.add(receipt.customerId);
 
-            // Calculate game type breakdown
-            if (receipt.gameRows && Array.isArray(receipt.gameRows)) {
-                receipt.gameRows.forEach(row => {
-                    const gameType = row.type || 'Unknown';
+                // Calculate game type breakdown
+                if (receipt.gameRows && Array.isArray(receipt.gameRows)) {
+                    receipt.gameRows.forEach(row => {
+                        const gameType = row.type || 'Unknown';
 
-                    if (!totalsByCompany[company].gameTypeBreakdown[gameType]) {
-                        totalsByCompany[company].gameTypeBreakdown[gameType] = {
-                            income: 0,
-                            payment: 0,
-                            count: 0
-                        };
-                    }
+                        if (!totalsByCompany[company].gameTypeBreakdown[gameType]) {
+                            totalsByCompany[company].gameTypeBreakdown[gameType] = {
+                                income: 0,
+                                payment: 0,
+                                count: 0
+                            };
+                        }
 
-                    // Add income from this game row
-                    const income = parseFloat(row.income) || 0;
-                    totalsByCompany[company].gameTypeBreakdown[gameType].income += income;
+                        // Add income from this game row
+                        const income = parseFloat(row.income) || 0;
+                        totalsByCompany[company].gameTypeBreakdown[gameType].income += income;
 
-                    // --- Calculate payment for this game row using accurate logic ---
-                    // 1. Evaluate expressions (e.g., "10+20")
-                    const oVal = evaluateExpression(row.o);
-                    const jodVal = evaluateExpression(row.jod);
-                    const koVal = evaluateExpression(row.ko);
+                        // --- Calculate payment for this game row using accurate logic ---
+                        // 1. Evaluate expressions (e.g., "10+20")
+                        const oVal = evaluateExpression(row.o);
+                        const jodVal = evaluateExpression(row.jod);
+                        const koVal = evaluateExpression(row.ko);
 
-                    // 2. Get multiplier
-                    const multiplier = Number(row.multiplier) || 1;
+                        // 2. Get multiplier
+                        const multiplier = Number(row.multiplier) || 1;
 
-                    let rowPayment = 0;
+                        let rowPayment = 0;
 
-                    // 3. Calculate O, Jod, Ko totals
-                    // Logic: O * mult, Jod * mult * 10, Ko * mult
-                    if (row.multiplier !== undefined) {
-                        rowPayment += (oVal * multiplier);
-                        rowPayment += (jodVal * multiplier * 10);
-                        rowPayment += (koVal * multiplier);
-                    } else {
-                        rowPayment += oVal + jodVal + koVal;
-                    }
+                        // 3. Calculate O, Jod, Ko totals
+                        // Logic: O * mult, Jod * mult * 10, Ko * mult
+                        if (row.multiplier !== undefined) {
+                            rowPayment += (oVal * multiplier);
+                            rowPayment += (jodVal * multiplier * 10);
+                            rowPayment += (koVal * multiplier);
+                        } else {
+                            rowPayment += oVal + jodVal + koVal;
+                        }
 
-                    // 4. Calculate Pan, Gun, Special totals (val1 * val2)
-                    const panVal1 = parseFloat(row.pan?.val1) || 0;
-                    const panVal2 = parseFloat(row.pan?.val2) || 0;
-                    rowPayment += (panVal1 * panVal2);
+                        // 4. Calculate Pan, Gun, Special totals (val1 * val2)
+                        const panVal1 = parseFloat(row.pan?.val1) || 0;
+                        const panVal2 = parseFloat(row.pan?.val2) || 0;
+                        rowPayment += (panVal1 * panVal2);
 
-                    const gunVal1 = parseFloat(row.gun?.val1) || 0;
-                    const gunVal2 = parseFloat(row.gun?.val2) || 0;
-                    rowPayment += (gunVal1 * gunVal2);
+                        const gunVal1 = parseFloat(row.gun?.val1) || 0;
+                        const gunVal2 = parseFloat(row.gun?.val2) || 0;
+                        rowPayment += (gunVal1 * gunVal2);
 
-                    const specialVal1 = parseFloat(row.special?.val1) || 0;
-                    const specialVal2 = parseFloat(row.special?.val2) || 0;
-                    rowPayment += (specialVal1 * specialVal2);
+                        const specialVal1 = parseFloat(row.special?.val1) || 0;
+                        const specialVal2 = parseFloat(row.special?.val2) || 0;
+                        rowPayment += (specialVal1 * specialVal2);
 
-                    totalsByCompany[company].gameTypeBreakdown[gameType].payment += rowPayment;
-                    totalsByCompany[company].gameTypeBreakdown[gameType].count += 1;
-                });
-            }
+                        totalsByCompany[company].gameTypeBreakdown[gameType].payment += rowPayment;
+                        totalsByCompany[company].gameTypeBreakdown[gameType].count += 1;
+                    });
+                }
 
-            // Track unique customers globally
-            uniqueCustomers.add(receipt.customerId);
-        });
+                // Track unique customers globally
+                uniqueCustomers.add(receipt.customerId);
+            });
 
-        // Convert Sets to counts and remove the Set objects
-        Object.keys(totalsByCompany).forEach(company => {
-            totalsByCompany[company].customerCount = totalsByCompany[company].customers.size;
-            delete totalsByCompany[company].customers;
-        });
+            // Convert Sets to counts and remove the Set objects
+            Object.keys(totalsByCompany).forEach(company => {
+                totalsByCompany[company].customerCount = totalsByCompany[company].customers.size;
+                delete totalsByCompany[company].customers;
+            });
 
-        // Calculate grand totals
-        const grandTotals = {
-            totalIncome: 0,
-            totalPayment: 0,
-            totalCustomers: uniqueCustomers.size,
-            totalReceipts: receipts.length
+            // Calculate grand totals
+            const grandTotals = {
+                totalIncome: 0,
+                totalPayment: 0,
+                totalCustomers: uniqueCustomers.size,
+                totalReceipts: receiptsToProcess.length
+            };
+
+            Object.values(totalsByCompany).forEach(companyData => {
+                grandTotals.totalIncome += companyData.totalIncome;
+                grandTotals.totalPayment += companyData.totalPayment;
+            });
+
+            return { totalsByCompany, grandTotals };
         };
 
-        Object.values(totalsByCompany).forEach(companyData => {
-            grandTotals.totalIncome += companyData.totalIncome;
-            grandTotals.totalPayment += companyData.totalPayment;
-        });
+        // If date range is provided, group by date; otherwise use single date logic
+        if (dateFrom && dateTo && dateFrom !== dateTo) {
+            // Date range mode - group by date
+            const receiptsByDate = {};
+            
+            receipts.forEach(receipt => {
+                // Get date string in YYYY-MM-DD format
+                const receiptDate = new Date(receipt.date);
+                receiptDate.setHours(0, 0, 0, 0);
+                const dateKey = receiptDate.toISOString().split('T')[0];
+                
+                if (!receiptsByDate[dateKey]) {
+                    receiptsByDate[dateKey] = [];
+                }
+                receiptsByDate[dateKey].push(receipt);
+            });
 
-        res.status(200).json({
-            date: date || null, // For backward compatibility
-            dateFrom: dateFrom || null,
-            dateTo: dateTo || null,
-            totalsByCompany,
-            grandTotals
-        });
+            // Process each date separately
+            const dateWiseData = {};
+            Object.keys(receiptsByDate).sort().forEach(dateKey => {
+                const dateReceipts = receiptsByDate[dateKey];
+                const { totalsByCompany, grandTotals } = processReceipts(dateReceipts);
+                dateWiseData[dateKey] = {
+                    totalsByCompany,
+                    grandTotals
+                };
+            });
+
+            res.status(200).json({
+                date: null,
+                dateFrom: dateFrom,
+                dateTo: dateTo,
+                dateWiseData, // New field for date-wise breakdown
+                totalsByCompany: null, // Keep for backward compatibility but set to null
+                grandTotals: null // Keep for backward compatibility but set to null
+            });
+        } else {
+            // Single date mode (backward compatible)
+            const { totalsByCompany, grandTotals } = processReceipts(receipts);
+            
+            res.status(200).json({
+                date: date || null,
+                dateFrom: dateFrom || null,
+                dateTo: dateTo || null,
+                dateWiseData: null,
+                totalsByCompany,
+                grandTotals
+            });
+        }
     } catch (err) {
         console.error("Error fetching daily totals:", err);
         res.status(500).json({ message: "Failed to fetch daily totals", error: err.message });

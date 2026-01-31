@@ -14,6 +14,7 @@ import reportRoutes from "./routes/reportRoutes.js";
 import receiptRoutes from "./routes/receiptRoutes.js";
 import activityRoutes from "./routes/activityRoutes.js";
 import shortcutRoutes from "./routes/shortcutRoutes.js";
+import marketDetailsRoutes from "./routes/marketDetailsRoutes.js";
 
 const app = express();
 
@@ -58,6 +59,7 @@ app.use("/api/reports", validateSystemHealth, reportRoutes);
 app.use("/api/receipts", validateSystemHealth, receiptRoutes);
 app.use("/api/activities", validateSystemHealth, activityRoutes);
 app.use("/api/shortcuts", validateSystemHealth, shortcutRoutes);
+app.use("/api/market-details", validateSystemHealth, marketDetailsRoutes);
 
 /* -------------------- 404 HANDLER -------------------- */
 app.use((req, res) => {

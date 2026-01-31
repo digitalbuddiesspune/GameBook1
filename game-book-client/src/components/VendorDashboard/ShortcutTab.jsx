@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import LoadingSpinner from "./components/LoadingSpinner";
-import { FaUsers, FaUndo, FaBolt, FaReceipt, FaPlus, FaMinus, FaChevronDown, FaChevronUp, FaSave, FaSearch } from "react-icons/fa";
+import { FaUsers, FaUndo, FaBolt, FaReceipt, FaPlus, FaMinus, FaChevronDown, FaChevronUp, FaSave, FaSearch, FaWhatsapp, FaTrash } from "react-icons/fa";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "../../contexts/LanguageContext";
@@ -30,8 +30,110 @@ const ShortcutTab = ({ businessName }) => {
   const [selectedDate, setSelectedDate] = useState(dayjs().format("YYYY-MM-DD"));
   const [searchQuery, setSearchQuery] = useState("");
   const [allReceipts, setAllReceipts] = useState([]);
+  const [savedMarketData, setSavedMarketData] = useState({});
+  const [currentDay, setCurrentDay] = useState(dayjs().format("YYYY-MM-DD"));
   const token = localStorage.getItem("token");
   const navigate = useNavigate();
+  const inputRefs = useRef({});
+
+  // Helper function to save market details to API
+  const saveMarketDetailsToAPI = async (customerId, companyName, date, data) => {
+    try {
+      const response = await axios.post(
+        `${API_BASE_URI}/api/market-details`,
+        {
+          customerId,
+          companyName,
+          date,
+          ...data,
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      return response.data.marketDetails;
+    } catch (error) {
+      console.error('Error saving market details to API:', error);
+      throw error;
+    }
+  };
+
+  // Helper function to load market details from API
+  const loadMarketDetailsFromAPI = async (customerId, companyName, date) => {
+    try {
+      const response = await axios.get(
+        `${API_BASE_URI}/api/market-details/${customerId}/${encodeURIComponent(companyName)}/${date}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      return response.data.marketDetails;
+    } catch (error) {
+      if (error.response?.status === 404) {
+        return null; // Not found is okay
+      }
+      console.error('Error loading market details from API:', error);
+      return null;
+    }
+  };
+
+  // Clean up old localStorage data (one-time migration cleanup)
+  useEffect(() => {
+    // Remove any old localStorage data from previous implementation
+    if (localStorage.getItem('savedMarketData')) {
+      localStorage.removeItem('savedMarketData');
+      console.log('Cleaned up old localStorage market data');
+    }
+  }, []);
+
+  // Load saved market data from API for current day
+  useEffect(() => {
+    const loadSavedData = async () => {
+      if (!token || customers.length === 0) return;
+      
+      try {
+        // Load market details for all customers for current day
+        const today = dayjs().format("YYYY-MM-DD");
+        const response = await axios.get(
+          `${API_BASE_URI}/api/market-details/date/${today}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        
+        if (response.data.success && response.data.marketDetails) {
+          const marketDataMap = {};
+          response.data.marketDetails.forEach((detail) => {
+            const key = `${detail.customerId}_${detail.companyName}_${detail.date}`;
+            marketDataMap[key] = {
+              open: detail.open || "",
+              close: detail.close || "",
+              jod: detail.jod || "",
+              gameRowOpen: detail.gameRowOpen || null,
+              gameRowClose: detail.gameRowClose || null,
+            };
+          });
+          setSavedMarketData(marketDataMap);
+        }
+      } catch (error) {
+        console.error('Error loading saved market data from API:', error);
+      }
+    };
+    
+    loadSavedData();
+  }, [token, customers, currentDay]);
+
+  // Auto-clear when day changes
+  useEffect(() => {
+    const today = dayjs().format("YYYY-MM-DD");
+    if (currentDay !== today) {
+      setCurrentDay(today);
+      // Clear saved market data for previous day (API will handle this)
+      setSavedMarketData({});
+      setShortcutData({});
+      toast.info('Day changed - Market data cleared');
+    }
+  }, [currentDay]);
 
   useEffect(() => {
     fetchCustomers();
@@ -113,9 +215,9 @@ const ShortcutTab = ({ businessName }) => {
           // Set default multiplier based on type if not present (for old receipts)
           let multiplier = row.multiplier;
           if (multiplier === undefined && row.type) {
-            if (row.type === 'आ.' || row.type === 'आ') {
+            if (row.type === 'ओ.' || row.type === 'को.') {
               multiplier = 8;
-            } else if (row.type === 'कु.' || row.type === 'कु') {
+            } else if (row.type === 'ओ.' || row.type === 'को.') {
               multiplier = 9;
             }
           }
@@ -218,6 +320,293 @@ const ShortcutTab = ({ businessName }) => {
     }));
   };
 
+  // Save open market details for a specific customer and market
+  const saveOpenMarket = async (companyName, customerId) => {
+    if (!companyName) {
+      toast.warning('Please select a market first');
+      return;
+    }
+
+    if (!customerId) {
+      toast.warning('Customer not found');
+      return;
+    }
+
+    const customerData = shortcutData[customerId];
+    if (!customerData) {
+      toast.warning('No data found for this customer');
+      return;
+    }
+
+    const openValue = customerData.open || "";
+
+    if (!openValue) {
+      toast.warning('Please enter open market value first');
+      return;
+    }
+
+    try {
+      const savedDetails = await saveMarketDetailsToAPI(customerId, companyName, currentDay, {
+        open: openValue,
+      });
+
+      // Update local state
+      const customerMarketKey = `${customerId}_${companyName}_${currentDay}`;
+      setSavedMarketData((prev) => ({
+        ...prev,
+        [customerMarketKey]: {
+          ...prev[customerMarketKey],
+          open: openValue,
+        },
+      }));
+
+      toast.success(`Open market details saved for this customer`);
+    } catch (error) {
+      toast.error('Failed to save open market details');
+      console.error('Error saving open market:', error);
+    }
+  };
+
+  // Save close market details for a specific customer and market
+  const saveCloseMarket = async (companyName, customerId) => {
+    if (!companyName) {
+      toast.warning('Please select a market first');
+      return;
+    }
+
+    if (!customerId) {
+      toast.warning('Customer not found');
+      return;
+    }
+
+    const customerData = shortcutData[customerId];
+    if (!customerData) {
+      toast.warning('No data found for this customer');
+      return;
+    }
+
+    const closeValue = customerData.close || "";
+
+    if (!closeValue) {
+      toast.warning('Please enter close market value first');
+      return;
+    }
+
+    try {
+      const savedDetails = await saveMarketDetailsToAPI(customerId, companyName, currentDay, {
+        close: closeValue,
+      });
+
+      // Update local state
+      const customerMarketKey = `${customerId}_${companyName}_${currentDay}`;
+      setSavedMarketData((prev) => ({
+        ...prev,
+        [customerMarketKey]: {
+          ...prev[customerMarketKey],
+          close: closeValue,
+        },
+      }));
+
+      toast.success(`Close market details saved for this customer`);
+    } catch (error) {
+      toast.error('Failed to save close market details');
+      console.error('Error saving close market:', error);
+    }
+  };
+
+  // Save game row for ओ. (Open) type
+  const saveGameRowOpen = async (companyName, customerId) => {
+    if (!companyName) {
+      toast.warning('Please select a market first');
+      return;
+    }
+
+    const customerData = shortcutData[customerId];
+    if (!customerData || !customerData.gameRows) {
+      toast.warning('No game rows found');
+      return;
+    }
+
+    // Find the ओ. type row
+    const openRow = customerData.gameRows.find(row => row.type === 'ओ.' || row.type === 'आ.');
+    
+    if (!openRow) {
+      toast.warning('Please add an ओ. (आ.) type row first');
+      return;
+    }
+
+    try {
+      // Prepare game row data (remove id for storage)
+      const { id, ...gameRowData } = openRow;
+      
+      const savedDetails = await saveMarketDetailsToAPI(customerId, companyName, currentDay, {
+        gameRowOpen: gameRowData,
+      });
+
+      // Update local state
+      const customerMarketKey = `${customerId}_${companyName}_${currentDay}`;
+      setSavedMarketData((prev) => ({
+        ...prev,
+        [customerMarketKey]: {
+          ...prev[customerMarketKey],
+          gameRowOpen: gameRowData,
+        },
+      }));
+
+      toast.success(`ओ. (आ.) game row saved for this customer`);
+    } catch (error) {
+      toast.error('Failed to save game row');
+      console.error('Error saving game row open:', error);
+    }
+  };
+
+  // Save game row for को. (Close) type
+  const saveGameRowClose = async (companyName, customerId) => {
+    if (!companyName) {
+      toast.warning('Please select a market first');
+      return;
+    }
+
+    const customerData = shortcutData[customerId];
+    if (!customerData || !customerData.gameRows) {
+      toast.warning('No game rows found');
+      return;
+    }
+
+    // Find the को. type row
+    const closeRow = customerData.gameRows.find(row => row.type === 'को.' || row.type === 'कु.');
+    
+    if (!closeRow) {
+      toast.warning('Please add a को. (कु.) type row first');
+      return;
+    }
+
+    try {
+      // Prepare game row data (remove id for storage)
+      const { id, ...gameRowData } = closeRow;
+      
+      const savedDetails = await saveMarketDetailsToAPI(customerId, companyName, currentDay, {
+        gameRowClose: gameRowData,
+      });
+
+      // Update local state
+      const customerMarketKey = `${customerId}_${companyName}_${currentDay}`;
+      setSavedMarketData((prev) => ({
+        ...prev,
+        [customerMarketKey]: {
+          ...prev[customerMarketKey],
+          gameRowClose: gameRowData,
+        },
+      }));
+
+      toast.success(`को. (कु.) game row saved for this customer`);
+    } catch (error) {
+      toast.error('Failed to save game row');
+      console.error('Error saving game row close:', error);
+    }
+  };
+
+  // Check if game row is saved for a specific customer
+  const isGameRowSaved = (companyName, customerId, type) => {
+    if (!companyName || !customerId) return false;
+    const customerMarketKey = `${customerId}_${companyName}_${currentDay}`;
+    return savedMarketData[customerMarketKey]?.[type] !== undefined;
+  };
+
+  // Check if market data is saved for a specific customer
+  const isMarketDataSaved = (companyName, customerId, type) => {
+    if (!companyName || !customerId) return false;
+    const customerMarketKey = `${customerId}_${companyName}_${currentDay}`;
+    return savedMarketData[customerMarketKey]?.[type] !== undefined;
+  };
+
+  // Share market details via WhatsApp
+  const shareMarketViaWhatsApp = (companyName, customerId, type) => {
+    if (!companyName || !customerId) {
+      toast.warning('Please select a market and customer first');
+      return;
+    }
+
+    const customerMarketKey = `${customerId}_${companyName}_${currentDay}`;
+    const marketData = savedMarketData[customerMarketKey];
+
+    if (!marketData || !marketData[type]) {
+      toast.warning(`${type === 'open' ? 'Open' : 'Close'} market data not saved yet`);
+      return;
+    }
+
+    const customer = customers.find(c => c._id === customerId);
+    const customerName = customer?.name || 'Customer';
+    const date = dayjs(currentDay).format("DD MMM YYYY");
+    const value = marketData[type];
+    const message = `${type === 'open' ? 'Open' : 'Close'} Market Details\n\nCustomer: ${customerName}\nMarket: ${companyName}\nDate: ${date}\n${type === 'open' ? 'Open' : 'Close'}: ${value}`;
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
+  // Clear saved market data for a specific customer
+  const clearMarketData = async (customerId, companyName) => {
+    if (!customerId || !companyName) {
+      if (window.confirm("Are you sure you want to clear all saved market data for today?")) {
+        try {
+          await axios.delete(
+            `${API_BASE_URI}/api/market-details/date/${currentDay}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+          setSavedMarketData({});
+          setShortcutData({});
+          toast.success('All market data cleared for today');
+        } catch (error) {
+          toast.error('Failed to clear market data');
+          console.error('Error clearing market data:', error);
+        }
+      }
+      return;
+    }
+
+    if (window.confirm(`Are you sure you want to clear saved market data for this customer and market?`)) {
+      try {
+        await axios.delete(
+          `${API_BASE_URI}/api/market-details`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            data: {
+              customerId,
+              companyName,
+              date: currentDay,
+            },
+          }
+        );
+        
+        // Update local state
+        const customerMarketKey = `${customerId}_${companyName}_${currentDay}`;
+        setSavedMarketData((prev) => {
+          const updated = { ...prev };
+          delete updated[customerMarketKey];
+          return updated;
+        });
+        
+        toast.success('Market data cleared for this customer');
+      } catch (error) {
+        toast.error('Failed to clear market data');
+        console.error('Error clearing market data:', error);
+      }
+    }
+  };
+
+  // Handle Enter key to move to next input
+  const handleKeyDown = (e, customerId, field, nextField) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const nextInputId = `${customerId}_${nextField}`;
+      if (inputRefs.current[nextInputId]) {
+        inputRefs.current[nextInputId].focus();
+      }
+    }
+  };
+
   const handleCompanyChange = (customerId, companyName) => {
     // Find receipts for this customer, company, and selected date
     const sortedReceipts = [...allReceipts].sort((a, b) =>
@@ -233,6 +622,73 @@ const ShortcutTab = ({ businessName }) => {
     const matchingReceipt = receiptsForDate.find(
       (receipt) => receipt.customerId === customerId && receipt.customerCompany === companyName
     );
+
+    // Check for saved market data for this specific customer
+    const customerMarketKey = `${customerId}_${companyName}_${currentDay}`;
+    const savedData = savedMarketData[customerMarketKey];
+
+    // Helper function to create game rows with saved data for this customer
+    const createGameRowsWithSavedData = (customerId) => {
+      const defaultRows = [
+        {
+          type: 'आ.',
+          income: '',
+          o: '',
+          jod: '',
+          ko: '',
+          multiplier: 8,
+          pan: { val1: '', val2: '' },
+          gun: { val1: '', val2: '' },
+          special: { val1: '', val2: '' },
+        },
+        {
+          type: 'कु.',
+          income: '',
+          o: '',
+          jod: '',
+          ko: '',
+          multiplier: 9,
+          pan: { val1: '', val2: '' },
+          gun: { val1: '', val2: '' },
+          special: { val1: '', val2: '' },
+        },
+      ];
+
+      // Get saved data for this specific customer
+      const customerMarketKey = `${customerId}_${companyName}_${currentDay}`;
+      const customerSavedData = savedMarketData[customerMarketKey];
+
+      // If saved game rows exist for this customer, merge them with defaults
+      if (customerSavedData?.gameRowOpen || customerSavedData?.gameRowClose) {
+        const rows = [...defaultRows];
+        
+        // Update ओ. (आ.) row with saved data
+        if (customerSavedData.gameRowOpen) {
+          const openRowIndex = rows.findIndex(r => r.type === 'आ.');
+          if (openRowIndex !== -1) {
+            rows[openRowIndex] = {
+              ...rows[openRowIndex],
+              ...customerSavedData.gameRowOpen,
+            };
+          }
+        }
+
+        // Update को. (कु.) row with saved data
+        if (customerSavedData.gameRowClose) {
+          const closeRowIndex = rows.findIndex(r => r.type === 'कु.');
+          if (closeRowIndex !== -1) {
+            rows[closeRowIndex] = {
+              ...rows[closeRowIndex],
+              ...customerSavedData.gameRowClose,
+            };
+          }
+        }
+
+        return rows;
+      }
+
+      return defaultRows;
+    };
 
     if (matchingReceipt) {
       // Receipt found - populate the form with receipt data
@@ -259,14 +715,28 @@ const ShortcutTab = ({ businessName }) => {
         };
       });
 
+      // Merge with saved game rows if they exist for this customer
+      const finalGameRows = mappedGameRows.length > 0 ? mappedGameRows : createGameRowsWithSavedData(customerId);
+      
+      // If saved game rows exist for this customer, update the matching rows
+      if (savedData?.gameRowOpen || savedData?.gameRowClose) {
+        finalGameRows.forEach((row, index) => {
+          if ((row.type === 'आ.' || row.type === 'ओ.') && savedData.gameRowOpen) {
+            finalGameRows[index] = { ...row, ...savedData.gameRowOpen };
+          } else if ((row.type === 'कु.' || row.type === 'को.') && savedData.gameRowClose) {
+            finalGameRows[index] = { ...row, ...savedData.gameRowClose };
+          }
+        });
+      }
+
       setShortcutData((prev) => ({
         ...prev,
         [customerId]: {
-          open: matchingReceipt.openCloseValues?.open || "",
-          close: matchingReceipt.openCloseValues?.close || "",
+          open: matchingReceipt.openCloseValues?.open || savedData?.open || "",
+          close: matchingReceipt.openCloseValues?.close || savedData?.close || "",
           jod: matchingReceipt.openCloseValues?.jod || "",
           company: companyName,
-          gameRows: mappedGameRows,
+          gameRows: finalGameRows,
           jama: matchingReceipt.jama || 0,
           chuk: matchingReceipt.chuk || 0,
           advanceAmount: matchingReceipt.advanceAmount || 0,
@@ -276,7 +746,7 @@ const ShortcutTab = ({ businessName }) => {
 
       toast.info(`Loaded existing receipt for ${companyName}`);
     } else {
-      // No receipt found - clear the form with default values
+      // No receipt found - use saved market data or clear the form with default values
       // Get latest financial data for this customer
       const customerReceipts = sortedReceipts.filter(r => r.customerId === customerId);
       let latestFinancialData = { previousBalance: 0, previousAdvance: 0 };
@@ -289,37 +759,16 @@ const ShortcutTab = ({ businessName }) => {
         };
       }
 
+      const gameRowsWithSaved = createGameRowsWithSavedData(customerId);
+
       setShortcutData((prev) => ({
         ...prev,
         [customerId]: {
-          open: "",
-          close: "",
+          open: savedData?.open || "",
+          close: savedData?.close || "",
           jod: "",
           company: companyName,
-          gameRows: [
-            {
-              type: 'आ.',
-              income: '',
-              o: '',
-              jod: '',
-              ko: '',
-              multiplier: 8,
-              pan: { val1: '', val2: '' },
-              gun: { val1: '', val2: '' },
-              special: { val1: '', val2: '' },
-            },
-            {
-              type: 'कु.',
-              income: '',
-              o: '',
-              jod: '',
-              ko: '',
-              multiplier: 9,
-              pan: { val1: '', val2: '' },
-              gun: { val1: '', val2: '' },
-              special: { val1: '', val2: '' },
-            },
-          ],
+          gameRows: gameRowsWithSaved,
           jama: latestFinancialData.previousBalance,
           chuk: 0,
           advanceAmount: latestFinancialData.previousAdvance,
@@ -327,7 +776,11 @@ const ShortcutTab = ({ businessName }) => {
         },
       }));
 
-      toast.info(`No existing receipt found for ${companyName}. Form cleared for new receipt.`);
+      if (savedData?.open || savedData?.close || savedData?.gameRowOpen || savedData?.gameRowClose) {
+        toast.info(`Auto-filled saved market data for ${companyName}`);
+      } else {
+        toast.info(`No existing receipt found for ${companyName}. Form cleared for new receipt.`);
+      }
     }
   };
 
@@ -941,49 +1394,123 @@ const ShortcutTab = ({ businessName }) => {
                       </div>
 
                       {/* Open/Close/Jod Fields */}
-                      <div className="grid grid-cols-3 gap-3 mb-4 pb-4 border-b border-gray-200">
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-1">
-                            ओ (Open)
-                          </label>
-                          <input
-                            type="text"
-                            value={customerData.open || ""}
-                            onChange={(e) =>
-                              handleInputChange(customer._id, "open", e.target.value)
-                            }
-                            placeholder="Open"
-                            className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition"
-                          />
+                      <div className="mb-4 pb-4 border-b border-gray-200">
+                        <div className="grid grid-cols-3 gap-3 mb-3">
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">
+                              ओ (Open)
+                            </label>
+                            <input
+                              ref={(el) => {
+                                const key = `${customer._id}_open`;
+                                if (el) inputRefs.current[key] = el;
+                              }}
+                              type="text"
+                              value={customerData.open || ""}
+                              onChange={(e) =>
+                                handleInputChange(customer._id, "open", e.target.value)
+                              }
+                              onKeyDown={(e) => handleKeyDown(e, customer._id, "open", "close")}
+                              placeholder="Open"
+                              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">
+                              क्लो (Close)
+                            </label>
+                            <input
+                              ref={(el) => {
+                                const key = `${customer._id}_close`;
+                                if (el) inputRefs.current[key] = el;
+                              }}
+                              type="text"
+                              value={customerData.close || ""}
+                              onChange={(e) =>
+                                handleInputChange(customer._id, "close", e.target.value)
+                              }
+                              onKeyDown={(e) => handleKeyDown(e, customer._id, "close", "jod")}
+                              placeholder="Close"
+                              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">
+                              जोड (Jod)
+                            </label>
+                            <input
+                              ref={(el) => {
+                                const key = `${customer._id}_jod`;
+                                if (el) inputRefs.current[key] = el;
+                              }}
+                              type="text"
+                              value={customerData.jod || ""}
+                              onChange={(e) =>
+                                handleInputChange(customer._id, "jod", e.target.value)
+                              }
+                              placeholder="Jod"
+                              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition"
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-1">
-                            क्लो (Close)
-                          </label>
-                          <input
-                            type="text"
-                            value={customerData.close || ""}
-                            onChange={(e) =>
-                              handleInputChange(customer._id, "close", e.target.value)
-                            }
-                            placeholder="Close"
-                            className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-1">
-                            जोड (Jod)
-                          </label>
-                          <input
-                            type="text"
-                            value={customerData.jod || ""}
-                            onChange={(e) =>
-                              handleInputChange(customer._id, "jod", e.target.value)
-                            }
-                            placeholder="Jod"
-                            className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-slate-500 focus:border-slate-500 transition"
-                          />
-                        </div>
+
+                        {/* Market Save Buttons and Actions */}
+                        {customerData.company && (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            <button
+                              onClick={() => saveOpenMarket(customerData.company, customer._id)}
+                              className="flex items-center gap-2 bg-blue-500 text-white px-3 py-1.5 rounded-lg hover:bg-blue-600 transition text-sm font-medium"
+                              title="Save Open Market Details for this Customer"
+                            >
+                              <FaSave size={12} />
+                              Save Open
+                              {isMarketDataSaved(customerData.company, customer._id, 'open') && (
+                                <span className="ml-1 text-xs bg-green-500 px-1.5 py-0.5 rounded">✓</span>
+                              )}
+                            </button>
+                            <button
+                              onClick={() => saveCloseMarket(customerData.company, customer._id)}
+                              className="flex items-center gap-2 bg-green-500 text-white px-3 py-1.5 rounded-lg hover:bg-green-600 transition text-sm font-medium"
+                              title="Save Close Market Details for this Customer"
+                            >
+                              <FaSave size={12} />
+                              Save Close
+                              {isMarketDataSaved(customerData.company, customer._id, 'close') && (
+                                <span className="ml-1 text-xs bg-green-500 px-1.5 py-0.5 rounded">✓</span>
+                              )}
+                            </button>
+                            
+                            {/* WhatsApp Share Buttons - Show only when both are saved */}
+                            {isMarketDataSaved(customerData.company, customer._id, 'open') && isMarketDataSaved(customerData.company, customer._id, 'close') && (
+                              <>
+                                <button
+                                  onClick={() => shareMarketViaWhatsApp(customerData.company, customer._id, 'open')}
+                                  className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition text-sm font-medium"
+                                  title="Share Open Market via WhatsApp"
+                                >
+                                  <FaWhatsapp size={14} />
+                                  Share Open
+                                </button>
+                                <button
+                                  onClick={() => shareMarketViaWhatsApp(customerData.company, customer._id, 'close')}
+                                  className="flex items-center gap-2 bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700 transition text-sm font-medium"
+                                  title="Share Close Market via WhatsApp"
+                                >
+                                  <FaWhatsapp size={14} />
+                                  Share Close
+                                </button>
+                                <button
+                                  onClick={() => clearMarketData(customer._id, customerData.company)}
+                                  className="flex items-center gap-2 bg-red-500 text-white px-3 py-1.5 rounded-lg hover:bg-red-600 transition text-sm font-medium"
+                                  title="Clear Market Data for this Customer"
+                                >
+                                  <FaTrash size={12} />
+                                  Clear
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Game Rows */}
@@ -1020,28 +1547,70 @@ const ShortcutTab = ({ businessName }) => {
                             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
                               <div>
                                 <label className="block text-xs font-medium text-gray-600 mb-1">
-                                  ओ. (Type)
+                                ओ. (Type)
                                 </label>
                                 <input
                                   type="text"
-                                  value={row.type || ""}
+                                  value={row.type}
+                                  disabled
                                   onChange={(e) =>
                                     handleGameRowChange(customer._id, rowIndex, "type", e.target.value)
                                   }
-                                  placeholder="आ./कु."
+                                  placeholder="आ."
                                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-slate-500"
                                 />
+                                {/* Save button for ओ. type */}
+                                {(row.type === 'ओ.' || row.type === 'आ.') && customerData.company && (
+                                  <button
+                                    onClick={() => saveGameRowOpen(customerData.company, customer._id)}
+                                    className="mt-1 w-full flex items-center justify-center gap-1 bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600 transition"
+                                    title="Save ओ. (आ.) Game Row for this Customer"
+                                  >
+                                    <FaSave size={10} />
+                                    Save
+                                    {isGameRowSaved(customerData.company, customer._id, 'gameRowOpen') && (
+                                      <span className="ml-0.5 text-xs">✓</span>
+                                    )}
+                                  </button>
+                                )}
+                                {/* Save button for को. type */}
+                                {(row.type === 'को.' || row.type === 'कु.') && customerData.company && (
+                                  <button
+                                    onClick={() => saveGameRowClose(customerData.company, customer._id)}
+                                    className="mt-1 w-full flex items-center justify-center gap-1 bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600 transition"
+                                    title="Save को. (कु.) Game Row for this Customer"
+                                  >
+                                    <FaSave size={10} />
+                                    Save
+                                    {isGameRowSaved(customerData.company, customer._id, 'gameRowClose') && (
+                                      <span className="ml-0.5 text-xs">✓</span>
+                                    )}
+                                  </button>
+                                )}
                               </div>
                               <div>
                                 <label className="block text-xs font-medium text-gray-600 mb-1">
                                   रक्कम (Income)
                                 </label>
                                 <input
+                                  ref={(el) => {
+                                    const key = `${customer._id}_income_${rowIndex}`;
+                                    if (el) inputRefs.current[key] = el;
+                                  }}
                                   type="text"
                                   value={row.income || ""}
                                   onChange={(e) =>
                                     handleGameRowChange(customer._id, rowIndex, "income", e.target.value)
                                   }
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const nextKey = `${customer._id}_o_${rowIndex}`;
+                                      if (inputRefs.current[nextKey]) {
+                                        inputRefs.current[nextKey].focus();
+                                      }
+                                    }
+                                  }}
                                   placeholder="Income"
                                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-slate-500"
                                 />
@@ -1051,11 +1620,24 @@ const ShortcutTab = ({ businessName }) => {
                                   ओ. (O)
                                 </label>
                                 <input
+                                  ref={(el) => {
+                                    const key = `${customer._id}_o_${rowIndex}`;
+                                    if (el) inputRefs.current[key] = el;
+                                  }}
                                   type="text"
                                   value={row.o || ""}
                                   onChange={(e) =>
                                     handleGameRowChange(customer._id, rowIndex, "o", e.target.value)
                                   }
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const nextKey = `${customer._id}_jod_${rowIndex}`;
+                                      if (inputRefs.current[nextKey]) {
+                                        inputRefs.current[nextKey].focus();
+                                      }
+                                    }
+                                  }}
                                   placeholder="O"
                                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-slate-500"
                                 />
@@ -1079,11 +1661,24 @@ const ShortcutTab = ({ businessName }) => {
                                   जोड (Jod)
                                 </label>
                                 <input
+                                  ref={(el) => {
+                                    const key = `${customer._id}_jod_${rowIndex}`;
+                                    if (el) inputRefs.current[key] = el;
+                                  }}
                                   type="text"
                                   value={row.jod || ""}
                                   onChange={(e) =>
                                     handleGameRowChange(customer._id, rowIndex, "jod", e.target.value)
                                   }
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      const nextKey = `${customer._id}_ko_${rowIndex}`;
+                                      if (inputRefs.current[nextKey]) {
+                                        inputRefs.current[nextKey].focus();
+                                      }
+                                    }
+                                  }}
                                   placeholder="Jod"
                                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-slate-500"
                                 />
@@ -1107,11 +1702,28 @@ const ShortcutTab = ({ businessName }) => {
                                   को. (Ko)
                                 </label>
                                 <input
+                                  ref={(el) => {
+                                    const key = `${customer._id}_ko_${rowIndex}`;
+                                    if (el) inputRefs.current[key] = el;
+                                  }}
                                   type="text"
                                   value={row.ko || ""}
                                   onChange={(e) =>
                                     handleGameRowChange(customer._id, rowIndex, "ko", e.target.value)
                                   }
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      // Move to next row's income field or pan val1
+                                      const nextRowIncomeKey = `${customer._id}_income_${rowIndex + 1}`;
+                                      const panVal1Key = `${customer._id}_pan_val1_${rowIndex}`;
+                                      if (inputRefs.current[nextRowIncomeKey]) {
+                                        inputRefs.current[nextRowIncomeKey].focus();
+                                      } else if (inputRefs.current[panVal1Key]) {
+                                        inputRefs.current[panVal1Key].focus();
+                                      }
+                                    }
+                                  }}
                                   placeholder="Ko"
                                   className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-slate-500"
                                 />
@@ -1129,6 +1741,7 @@ const ShortcutTab = ({ businessName }) => {
                                     <span>= {((parseFloat(row.ko) || 0) * (row.multiplier || 0)).toFixed(0)}</span>
                                   </div>
                                 )}
+                                {/* Save button for को. type - show below the type field, not ko field */}
                               </div>
                               <div>
                                 <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -1136,21 +1749,47 @@ const ShortcutTab = ({ businessName }) => {
                                 </label>
                                 <div className="flex items-center gap-1">
                                   <input
+                                    ref={(el) => {
+                                      const key = `${customer._id}_pan_val1_${rowIndex}`;
+                                      if (el) inputRefs.current[key] = el;
+                                    }}
                                     type="text"
                                     value={row.pan?.val1 || ""}
                                     onChange={(e) =>
                                       handleGameRowChange(customer._id, rowIndex, "pan.val1", e.target.value)
                                     }
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const nextKey = `${customer._id}_pan_val2_${rowIndex}`;
+                                        if (inputRefs.current[nextKey]) {
+                                          inputRefs.current[nextKey].focus();
+                                        }
+                                      }
+                                    }}
                                     placeholder="0"
                                     className="w-10 px-1 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-slate-500 text-center"
                                   />
                                   <span className="text-xs">×</span>
                                   <input
+                                    ref={(el) => {
+                                      const key = `${customer._id}_pan_val2_${rowIndex}`;
+                                      if (el) inputRefs.current[key] = el;
+                                    }}
                                     type="text"
                                     value={row.pan?.val2 || ""}
                                     onChange={(e) =>
                                       handleGameRowChange(customer._id, rowIndex, "pan.val2", e.target.value)
                                     }
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const nextKey = `${customer._id}_gun_val1_${rowIndex}`;
+                                        if (inputRefs.current[nextKey]) {
+                                          inputRefs.current[nextKey].focus();
+                                        }
+                                      }
+                                    }}
                                     placeholder="0"
                                     className="w-10 px-1 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-slate-500 text-center"
                                   />
@@ -1162,21 +1801,47 @@ const ShortcutTab = ({ businessName }) => {
                                 </label>
                                 <div className="flex items-center gap-1">
                                   <input
+                                    ref={(el) => {
+                                      const key = `${customer._id}_gun_val1_${rowIndex}`;
+                                      if (el) inputRefs.current[key] = el;
+                                    }}
                                     type="text"
                                     value={row.gun?.val1 || ""}
                                     onChange={(e) =>
                                       handleGameRowChange(customer._id, rowIndex, "gun.val1", e.target.value)
                                     }
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const nextKey = `${customer._id}_gun_val2_${rowIndex}`;
+                                        if (inputRefs.current[nextKey]) {
+                                          inputRefs.current[nextKey].focus();
+                                        }
+                                      }
+                                    }}
                                     placeholder="0"
                                     className="w-10 px-1 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-slate-500 text-center"
                                   />
                                   <span className="text-xs">×</span>
                                   <input
+                                    ref={(el) => {
+                                      const key = `${customer._id}_gun_val2_${rowIndex}`;
+                                      if (el) inputRefs.current[key] = el;
+                                    }}
                                     type="text"
                                     value={row.gun?.val2 || ""}
                                     onChange={(e) =>
                                       handleGameRowChange(customer._id, rowIndex, "gun.val2", e.target.value)
                                     }
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const nextKey = `${customer._id}_special_val1_${rowIndex}`;
+                                        if (inputRefs.current[nextKey]) {
+                                          inputRefs.current[nextKey].focus();
+                                        }
+                                      }
+                                    }}
                                     placeholder="0"
                                     className="w-10 px-1 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-slate-500 text-center"
                                   />
@@ -1188,21 +1853,48 @@ const ShortcutTab = ({ businessName }) => {
                                 </label>
                                 <div className="flex items-center gap-1">
                                   <input
+                                    ref={(el) => {
+                                      const key = `${customer._id}_special_val1_${rowIndex}`;
+                                      if (el) inputRefs.current[key] = el;
+                                    }}
                                     type="text"
                                     value={row.special?.val1 || ""}
                                     onChange={(e) =>
                                       handleGameRowChange(customer._id, rowIndex, "special.val1", e.target.value)
                                     }
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const nextKey = `${customer._id}_special_val2_${rowIndex}`;
+                                        if (inputRefs.current[nextKey]) {
+                                          inputRefs.current[nextKey].focus();
+                                        }
+                                      }
+                                    }}
                                     placeholder="0"
                                     className="w-10 px-1 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-slate-500 text-center"
                                   />
                                   <span className="text-xs">×</span>
                                   <input
+                                    ref={(el) => {
+                                      const key = `${customer._id}_special_val2_${rowIndex}`;
+                                      if (el) inputRefs.current[key] = el;
+                                    }}
                                     type="text"
                                     value={row.special?.val2 || ""}
                                     onChange={(e) =>
                                       handleGameRowChange(customer._id, rowIndex, "special.val2", e.target.value)
                                     }
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        // Move to next row's income field
+                                        const nextRowIncomeKey = `${customer._id}_income_${rowIndex + 1}`;
+                                        if (inputRefs.current[nextRowIncomeKey]) {
+                                          inputRefs.current[nextRowIncomeKey].focus();
+                                        }
+                                      }
+                                    }}
                                     placeholder="0"
                                     className="w-10 px-1 py-1 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-slate-500 text-center"
                                   />

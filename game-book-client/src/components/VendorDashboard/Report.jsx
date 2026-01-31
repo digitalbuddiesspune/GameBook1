@@ -1304,160 +1304,459 @@ export default function ReportPage() {
                   <h2 className="text-xl font-semibold text-gray-800">Overview</h2>
                 </div>
 
-                {/* --- DAILY SUMMARY CARD (Dashboard) --- */}
-                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white mb-6 print-hidden">
-                  {dailyTotalsLoading ? (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Loader2 className="w-6 h-6 animate-spin" />
-                        <p className="opacity-90">Loading summary...</p>
-                      </div>
-                      <div className="flex gap-2">
-                        <input
-                          type="date"
-                          value={overviewDateFrom}
-                          onChange={(e) => setOverviewDateFrom(e.target.value)}
-                          className="px-3 py-1 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer"
-                        />
-                        <span className="text-white opacity-75">to</span>
-                        <input
-                          type="date"
-                          value={overviewDateTo}
-                          onChange={(e) => setOverviewDateTo(e.target.value)}
-                          min={overviewDateFrom}
-                          className="px-3 py-1 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer"
-                        />
-                      </div>
+                {/* Date Range Selector */}
+                <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm mb-6 print-hidden">
+                  <div className="flex flex-col sm:flex-row gap-4 items-center">
+                    <label className="text-sm font-medium text-gray-700 whitespace-nowrap">Select Date Range:</label>
+                    <div className="flex items-center gap-2 flex-1">
+                      <input
+                        type="date"
+                        value={overviewDateFrom}
+                        onChange={(e) => setOverviewDateFrom(e.target.value)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      />
+                      <span className="text-gray-600">to</span>
+                      <input
+                        type="date"
+                        value={overviewDateTo}
+                        onChange={(e) => setOverviewDateTo(e.target.value)}
+                        min={overviewDateFrom}
+                        className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                      />
                     </div>
-                  ) : dailyTotals ? (
-                    <>
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-                        <div>
-                          <div className="flex items-center gap-3 mb-1 flex-wrap">
-                            <h3 className="text-lg font-semibold opacity-90">
+                  </div>
+                </div>
+
+                {/* Date-wise Summary Cards */}
+                {dailyTotalsLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-slate-600" />
+                    <p className="ml-3 text-gray-600">Loading summary...</p>
+                  </div>
+                ) : dailyTotals ? (
+                  <>
+                    {/* Check if we have date-wise data (date range) or single date data */}
+                    {dailyTotals.dateWiseData ? (
+                      // Date range mode - show each date separately
+                      <div className="space-y-6">
+                        {Object.entries(dailyTotals.dateWiseData)
+                          .sort(([dateA], [dateB]) => new Date(dateB) - new Date(dateA))
+                          .map(([dateKey, dateData]) => {
+                            const dateObj = new Date(dateKey);
+                            const formattedDate = dateObj.toLocaleDateString('en-IN', { 
+                              day: 'numeric', 
+                              month: 'short', 
+                              year: 'numeric' 
+                            });
+                            const shortDate = dateObj.toLocaleDateString('en-IN', { 
+                              day: 'numeric', 
+                              month: 'numeric', 
+                              year: '2-digit' 
+                            });
+
+                            // Calculate to give money (देणे) and to receive money (येणे)
+                            // Based on the business logic: payment is what we give, income is what we receive
+                            const toReceive = dateData.grandTotals.totalIncome || 0;
+                            const toGive = dateData.grandTotals.totalPayment || 0;
+                            const grandTotal = toReceive + toGive;
+
+                            return (
+                              <div key={dateKey} className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white">
+                                {/* Date Header */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-white/20">
+                                  <div>
+                                    <h3 className="text-sm font-bold mb-1">{formattedDate}</h3>
+                                    {/* <p className="text-xs opacity-75">Date: {shortDate}</p> */}
+                                  </div>
+                                  <div className="flex items-center gap-4 flex-wrap">
+                                    <div className="bg-white/20 px-4 py-2 rounded-lg text-center">
+                                      <p className="text-xs opacity-75 mb-0.5">Receipts</p>
+                                      <p className="font-bold text-sm">{dateData.grandTotals.totalReceipts}</p>
+                                    </div>
+                                    <div className="bg-white/20 px-4 py-2 rounded-lg text-center">
+                                      <p className="text-xs opacity-75 mb-0.5">Customers</p>
+                                      <p className="font-bold text-sm">{dateData.grandTotals.totalCustomers}</p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Calculate ओ and को from gameTypeBreakdown */}
+                                {(() => {
+                                  // Calculate ओ (Open) - sum of ओ. and आ. types
+                                  let oTotal = 0;
+                                  let koTotal = 0;
+                                  
+                                  Object.values(dateData.totalsByCompany).forEach(companyData => {
+                                    if (companyData.gameTypeBreakdown) {
+                                      Object.entries(companyData.gameTypeBreakdown).forEach(([type, stats]) => {
+                                        if (type === 'ओ.' || type === 'आ.') {
+                                          oTotal += (stats.income || 0) + (stats.payment || 0);
+                                        } else if (type === 'को.' || type === 'कु.') {
+                                          koTotal += (stats.income || 0) + (stats.payment || 0);
+                                        }
+                                      });
+                                    }
+                                  });
+
+                                  // Calculate totals
+                                  const total = oTotal + koTotal;
+                                  const commission = total * 0.10; // 10% commission
+                                  const afterTotal = total - commission;
+                                  
+                                  // Use original येणे and देणे from receipts data
+                                  const yene = dateData.grandTotals.totalIncome || 0;
+                                  const dene = dateData.grandTotals.totalPayment || 0;
+
+                                  return (
+                                    <>
+                                      {/* ओ, को, टो., क., ए. टो. Display */}
+                                      {/* <div className="space-y-3 mb-6">
+                                        <div className="grid grid-cols-2 gap-3">
+                                          <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm border border-white/10">
+                                            <p className="text-xs opacity-75 mb-1">ओ (Open)</p>
+                                            <p className="text-sm font-bold">₹{oTotal.toFixed(2)}</p>
+                                          </div>
+                                          <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm border border-white/10">
+                                            <p className="text-xs opacity-75 mb-1">को (Close)</p>
+                                            <p className="text-sm font-bold">₹{koTotal.toFixed(2)}</p>
+                                          </div>
+                                        </div>
+                                        <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm border border-white/10">
+                                          <p className="text-xs opacity-75 mb-1">टो. (Total)</p>
+                                          <p className="text-sm font-bold">₹{total.toFixed(2)}</p>
+                                        </div>
+                                        <div className="bg-yellow-500/20 rounded-lg p-3 backdrop-blur-sm border border-yellow-300/30">
+                                          <p className="text-xs opacity-90 mb-1">क. (Commission) 10%</p>
+                                          <p className="text-sm font-bold">₹{commission.toFixed(2)}</p>
+                                        </div>
+                                        <div className="bg-blue-500/20 rounded-lg p-3 backdrop-blur-sm border border-blue-300/30">
+                                          <p className="text-xs opacity-90 mb-1">ए. टो. (After Total)</p>
+                                          <p className="text-sm font-bold">₹{afterTotal.toFixed(2)}</p>
+                                        </div>
+                                      </div> */}
+
+                                      {/* येणे and देणे from ए. टो. */}
+                                      {/* <div className="grid grid-cols-2 gap-3 mb-6">
+                                        <div className="bg-green-500/20 rounded-lg p-3 backdrop-blur-sm border border-green-300/30">
+                                          <p className="text-xs opacity-90 mb-1">येणे</p>
+                                          <p className="text-sm font-bold">₹{yene.toFixed(2)}</p>
+                                        </div>
+                                        <div className="bg-red-500/20 rounded-lg p-3 backdrop-blur-sm border border-red-300/30">
+                                          <p className="text-xs opacity-90 mb-1">देणे</p>
+                                          <p className="text-sm font-bold">₹{dene.toFixed(2)}</p>
+                                        </div>
+                                      </div> */}
+                                    </>
+                                  );
+                                })()}
+
+                                {/* Company Breakdown with Date */}
+                                {Object.keys(dateData.totalsByCompany).length > 0 ? (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {Object.entries(dateData.totalsByCompany).map(([company, data]) => (
+                                      <div key={company} className="bg-white/10 rounded-lg p-4 backdrop-blur-sm border border-white/10 hover:bg-white/15 transition-colors">
+                                        <div className="flex justify-between items-start mb-2">
+                                          <div className="flex-1">
+                                            <p className="font-bold text-sm truncate pr-2" title={company}>{company}</p>
+                                            <p className="text-xs opacity-75 mt-1">Date: {shortDate}</p>
+                                          </div>
+                                        </div>
+                                        <div className="flex gap-3 text-xs opacity-80 mb-3 pb-2 border-b border-white/10">
+                                          <span>Receipts: <b>{data.receiptsCount}</b></span>
+                                          <span>Customers: <b>{data.customerCount}</b></span>
+                                        </div>
+                                        {(() => {
+                                          // Calculate ओ and को for this company
+                                          let oAmount = 0;
+                                          let koAmount = 0;
+                                          
+                                          if (data.gameTypeBreakdown) {
+                                            Object.entries(data.gameTypeBreakdown).forEach(([type, stats]) => {
+                                              if (type === 'ओ.' || type === 'आ.') {
+                                                oAmount += (stats.income || 0) + (stats.payment || 0);
+                                              } else if (type === 'को.' || type === 'कु.') {
+                                                koAmount += (stats.income || 0) + (stats.payment || 0);
+                                              }
+                                            });
+                                          }
+
+                                          const total = oAmount + koAmount;
+                                          const commission = total * 0.10;
+                                          const afterTotal = total - commission;
+                                          
+                                          // Use original येणे and देणे from company data
+                                          const yene = data.totalIncome || 0;
+                                          const dene = data.totalPayment || 0;
+
+                                          return (
+                                            <div className="space-y-2">
+                                              <div className="grid grid-cols-2 gap-2 text-xs">
+                                                <div>
+                                                  <span className="opacity-75">ओ:</span>
+                                                  <span className="font-semibold ml-1">₹{oAmount.toFixed(2)}</span>
+                                                </div>
+                                                <div>
+                                                  <span className="opacity-75">को:</span>
+                                                  <span className="font-semibold ml-1">₹{koAmount.toFixed(2)}</span>
+                                                </div>
+                                              </div>
+                                              <div className="text-xs">
+                                                <span className="opacity-75">टो.:</span>
+                                                <span className="font-semibold ml-1">₹{total.toFixed(2)}</span>
+                                              </div>
+                                              <div className="text-xs">
+                                                <span className="opacity-75">क. 10%:</span>
+                                                <span className="font-semibold ml-1">₹{commission.toFixed(2)}</span>
+                                              </div>
+                                              <div className="text-xs">
+                                                <span className="opacity-75">ए. टो.:</span>
+                                                <span className="font-semibold ml-1">₹{afterTotal.toFixed(2)}</span>
+                                              </div>
+                                              <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-white/10">
+                                                <div>
+                                                  <span className="opacity-75">येणे:</span>
+                                                  <span className="font-semibold ml-1">₹{yene.toFixed(2)}</span>
+                                                </div>
+                                                <div>
+                                                  <span className="opacity-75">देणे:</span>
+                                                  <span className="font-semibold ml-1">₹{dene.toFixed(2)}</span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
+
+                                        {/* Game Analysis */}
+                                        {data.gameTypeBreakdown && Object.keys(data.gameTypeBreakdown).length > 0 && (
+                                          <div className="space-y-1.5 mt-3 pt-3 border-t border-white/10">
+                                            {Object.entries(data.gameTypeBreakdown).map(([type, stats]) => (
+                                              <div key={type} className="flex justify-between items-center text-xs">
+                                                <span className="opacity-80 font-medium">{type} <span className="opacity-50">({stats.count})</span></span>
+                                                <span className="font-semibold" title="Total (Income + Payment)">
+                                                  ₹{(stats.income + stats.payment).toFixed(0)}
+                                                </span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <div className="text-center py-4 bg-white/5 rounded-lg">
+                                    <p className="opacity-75 text-sm">No records found for this date.</p>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                      </div>
+                    ) : (
+                      // Single date mode (backward compatible)
+                      <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg p-6 text-white mb-6">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                          <div>
+                            <h3 className="text-sm font-semibold opacity-90 mb-1">
                               {overviewDateFrom === overviewDateTo 
                                 ? (new Date(overviewDateFrom).toDateString() === new Date().toDateString() 
                                     ? "Today Summary" 
                                     : "Daily Summary")
-                                : "Date Range Summary"}
+                                : "Daily Summary"}
                             </h3>
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs bg-white/20 px-2 py-0.5 rounded">
-                                {new Date(overviewDateFrom).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                              </span>
-                              {overviewDateFrom !== overviewDateTo && (
-                                <>
-                                  <span className="text-xs opacity-75">to</span>
-                                  <span className="text-xs bg-white/20 px-2 py-0.5 rounded">
-                                    {new Date(overviewDateTo).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-                                  </span>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                          <p className="text-xs opacity-75">Combined total (Income + Payment)</p>
-                        </div>
-
-                        <div className="flex items-center gap-4 flex-wrap">
-                          {/* Grand Total Counts */}
-                          <div className="flex gap-4 text-right sm:text-center mr-2">
-                            <div>
-                              <p className="text-[10px] opacity-75 uppercase tracking-wide">Receipts</p>
-                              <p className="font-bold text-sm">{dailyTotals.grandTotals.totalReceipts}</p>
-                            </div>
-                            <div>
-                              <p className="text-[10px] opacity-75 uppercase tracking-wide">Customers</p>
-                              <p className="font-bold text-sm">{dailyTotals.grandTotals.totalCustomers}</p>
-                            </div>
-                          </div>
-
-                          <div className="bg-white/20 px-4 py-2 rounded-lg text-center min-w-[120px]">
-                            <p className="text-xs opacity-75 mb-0.5">Grand Total</p>
-                            <p className="text-xl font-bold">
-                              ₹{(dailyTotals.grandTotals.totalIncome + dailyTotals.grandTotals.totalPayment).toFixed(2)}
+                            <p className="text-xs opacity-75">
+                              {new Date(overviewDateFrom).toLocaleDateString('en-IN', { 
+                                day: 'numeric', 
+                                month: 'long', 
+                                year: 'numeric' 
+                              })}
                             </p>
                           </div>
-                          
-                          {/* Date Range Inputs */}
-                          <div className="flex gap-2 items-center">
-                            <input
-                              type="date"
-                              value={overviewDateFrom}
-                              onChange={(e) => setOverviewDateFrom(e.target.value)}
-                              className="px-3 py-2 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer shadow-sm"
-                            />
-                            <span className="text-white opacity-75 text-sm">to</span>
-                            <input
-                              type="date"
-                              value={overviewDateTo}
-                              onChange={(e) => setOverviewDateTo(e.target.value)}
-                              min={overviewDateFrom}
-                              className="px-3 py-2 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer shadow-sm"
-                            />
+                          <div className="flex items-center gap-4 flex-wrap">
+                            <div className="flex gap-4 text-right sm:text-center">
+                              <div>
+                                <p className="text-[10px] opacity-75 uppercase tracking-wide">Receipts</p>
+                                <p className="font-bold text-sm">{dailyTotals.grandTotals.totalReceipts}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] opacity-75 uppercase tracking-wide">Customers</p>
+                                <p className="font-bold text-sm">{dailyTotals.grandTotals.totalCustomers}</p>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Company Breakdown (Merged) */}
-                      {Object.keys(dailyTotals.totalsByCompany).length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                          {Object.entries(dailyTotals.totalsByCompany).map(([company, data]) => (
-                            <div key={company} className="bg-white/10 rounded-lg p-4 backdrop-blur-sm border border-white/10 hover:bg-white/15 transition-colors">
-                              <div className="flex justify-between items-start mb-2">
-                                <p className="font-bold text-base truncate pr-2" title={company}>{company}</p>
-                                <span className="font-bold text-lg bg-white/20 px-2 py-0.5 rounded text-sm">
-                                  ₹{(data.totalIncome + data.totalPayment).toFixed(0)}
-                                </span>
-                              </div>
-                              <div className="flex gap-3 text-xs opacity-80 mb-3 pb-2 border-b border-white/10">
-                                <span>Receipts: <b>{data.receiptsCount}</b></span>
-                                <span>Customers: <b>{data.customerCount}</b></span>
-                              </div>
+                        {/* Calculate ओ and को from gameTypeBreakdown */}
+                        {(() => {
+                          // Calculate ओ (Open) - sum of ओ. and आ. types
+                          let oTotal = 0;
+                          let koTotal = 0;
+                          
+                          Object.values(dailyTotals.totalsByCompany).forEach(companyData => {
+                            if (companyData.gameTypeBreakdown) {
+                              Object.entries(companyData.gameTypeBreakdown).forEach(([type, stats]) => {
+                                if (type === 'ओ.' || type === 'आ.') {
+                                  oTotal += (stats.income || 0) + (stats.payment || 0);
+                                } else if (type === 'को.' || type === 'कु.') {
+                                  koTotal += (stats.income || 0) + (stats.payment || 0);
+                                }
+                              });
+                            }
+                          });
 
-                              {/* Game Analysis */}
-                              {data.gameTypeBreakdown && Object.keys(data.gameTypeBreakdown).length > 0 && (
-                                <div className="space-y-1.5 mt-3 pt-3">
-                                  {Object.entries(data.gameTypeBreakdown).map(([type, stats]) => (
-                                    <div key={type} className="flex justify-between items-center text-xs">
-                                      <span className="opacity-80 font-medium">{type} <span className="opacity-50">({stats.count})</span></span>
-                                      <span className="font-semibold" title="Total (Income + Payment)">
-                                        ₹{(stats.income + stats.payment).toFixed(0)}
-                                      </span>
-                                    </div>
-                                  ))}
+                          // Calculate totals
+                          const total = oTotal + koTotal;
+                          const commission = total * 0.10; // 10% commission
+                          const afterTotal = total - commission;
+                          
+                          // Use original येणे and देणे from receipts data
+                          const yene = dailyTotals.grandTotals.totalIncome || 0;
+                          const dene = dailyTotals.grandTotals.totalPayment || 0;
+
+                          return (
+                            <>
+                              {/* ओ, को, टो., क., ए. टो. Display */}
+                              <div className="space-y-3 mb-6">
+                                <div className="grid grid-cols-2 gap-3">
+                                  <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm border border-white/10">
+                                    <p className="text-xs opacity-75 mb-1">ओ (Open)</p>
+                                    <p className="text-sm font-bold">₹{oTotal.toFixed(2)}</p>
+                                  </div>
+                                  <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm border border-white/10">
+                                    <p className="text-xs opacity-75 mb-1">को (Close)</p>
+                                    <p className="text-sm font-bold">₹{koTotal.toFixed(2)}</p>
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-center py-4 bg-white/5 rounded-lg">
-                          <p className="opacity-75 text-sm">No records found for this date.</p>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="text-center py-6">
-                      <p className="opacity-75 mb-4">Select date range to view summary</p>
-                      <div className="flex gap-2 justify-center items-center">
-                        <input
-                          type="date"
-                          value={overviewDateFrom}
-                          onChange={(e) => setOverviewDateFrom(e.target.value)}
-                          className="px-3 py-2 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer"
-                        />
-                        <span className="text-white opacity-75">to</span>
-                        <input
-                          type="date"
-                          value={overviewDateTo}
-                          onChange={(e) => setOverviewDateTo(e.target.value)}
-                          min={overviewDateFrom}
-                          className="px-3 py-2 text-slate-800 text-sm rounded-lg focus:outline-none cursor-pointer"
-                        />
+                                <div className="bg-white/10 rounded-lg p-3 backdrop-blur-sm border border-white/10">
+                                  <p className="text-xs opacity-75 mb-1">टो. (Total)</p>
+                                  <p className="text-sm font-bold">₹{total.toFixed(2)}</p>
+                                </div>
+                                <div className="bg-yellow-500/20 rounded-lg p-3 backdrop-blur-sm border border-yellow-300/30">
+                                  <p className="text-xs opacity-90 mb-1">क. (Commission) 10%</p>
+                                  <p className="text-sm font-bold">₹{commission.toFixed(2)}</p>
+                                </div>
+                                <div className="bg-blue-500/20 rounded-lg p-3 backdrop-blur-sm border border-blue-300/30">
+                                  <p className="text-xs opacity-90 mb-1">ए. टो. (After Total)</p>
+                                  <p className="text-sm font-bold">₹{afterTotal.toFixed(2)}</p>
+                                </div>
+                              </div>
+
+                              {/* येणे and देणे from ए. टो. */}
+                              <div className="grid grid-cols-2 gap-3 mb-6">
+                                <div className="bg-green-500/20 rounded-lg p-3 backdrop-blur-sm border border-green-300/30">
+                                  <p className="text-xs opacity-90 mb-1">येणे</p>
+                                  <p className="text-sm font-bold">₹{yene.toFixed(2)}</p>
+                                </div>
+                                <div className="bg-red-500/20 rounded-lg p-3 backdrop-blur-sm border border-red-300/30">
+                                  <p className="text-xs opacity-90 mb-1">देणे</p>
+                                  <p className="text-sm font-bold">₹{dene.toFixed(2)}</p>
+                                </div>
+                              </div>
+                            </>
+                          );
+                        })()}
+
+                        {/* Company Breakdown */}
+                        {Object.keys(dailyTotals.totalsByCompany).length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {Object.entries(dailyTotals.totalsByCompany).map(([company, data]) => (
+                              <div key={company} className="bg-white/10 rounded-lg p-4 backdrop-blur-sm border border-white/10 hover:bg-white/15 transition-colors">
+                                <div className="flex justify-between items-start mb-2">
+                                  <p className="font-bold text-sm truncate pr-2" title={company}>{company}</p>
+                                </div>
+                                <div className="flex gap-3 text-xs opacity-80 mb-3 pb-2 border-b border-white/10">
+                                  <span>Receipts: <b>{data.receiptsCount}</b></span>
+                                  <span>Customers: <b>{data.customerCount}</b></span>
+                                </div>
+                                {(() => {
+                                  // Calculate ओ and को for this company
+                                  let oAmount = 0;
+                                  let koAmount = 0;
+                                  
+                                  if (data.gameTypeBreakdown) {
+                                    Object.entries(data.gameTypeBreakdown).forEach(([type, stats]) => {
+                                      if (type === 'ओ.' || type === 'आ.') {
+                                        oAmount += (stats.income || 0) + (stats.payment || 0);
+                                      } else if (type === 'को.' || type === 'कु.') {
+                                        koAmount += (stats.income || 0) + (stats.payment || 0);
+                                      }
+                                    });
+                                  }
+
+                                  const total = oAmount + koAmount;
+                                  const commission = total * 0.10;
+                                  const afterTotal = total - commission;
+                                  
+                                  // Use original येणे and देणे from company data
+                                  const yene = data.totalIncome || 0;
+                                  const dene = data.totalPayment || 0;
+
+                                  return (
+                                    <div className="space-y-2">
+                                      <div className="grid grid-cols-2 gap-2 text-xs">
+                                        <div>
+                                          <span className="opacity-75">ओ:</span>
+                                          <span className="font-semibold ml-1">₹{oAmount.toFixed(2)}</span>
+                                        </div>
+                                        <div>
+                                          <span className="opacity-75">को:</span>
+                                          <span className="font-semibold ml-1">₹{koAmount.toFixed(2)}</span>
+                                        </div>
+                                      </div>
+                                      <div className="text-xs">
+                                        <span className="opacity-75">टो.:</span>
+                                        <span className="font-semibold ml-1">₹{total.toFixed(2)}</span>
+                                      </div>
+                                      <div className="text-xs">
+                                        <span className="opacity-75">क. 10%:</span>
+                                        <span className="font-semibold ml-1">₹{commission.toFixed(2)}</span>
+                                      </div>
+                                      <div className="text-xs">
+                                        <span className="opacity-75">ए. टो.:</span>
+                                        <span className="font-semibold ml-1">₹{afterTotal.toFixed(2)}</span>
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-white/10">
+                                        <div>
+                                          <span className="opacity-75">येणे:</span>
+                                          <span className="font-semibold ml-1">₹{yene.toFixed(2)}</span>
+                                        </div>
+                                        <div>
+                                          <span className="opacity-75">देणे:</span>
+                                          <span className="font-semibold ml-1">₹{dene.toFixed(2)}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
+                                {/* Game Analysis */}
+                                {data.gameTypeBreakdown && Object.keys(data.gameTypeBreakdown).length > 0 && (
+                                  <div className="space-y-1.5 mt-3 pt-3 border-t border-white/10">
+                                    {Object.entries(data.gameTypeBreakdown).map(([type, stats]) => (
+                                      <div key={type} className="flex justify-between items-center text-xs">
+                                        <span className="opacity-80 font-medium">{type} <span className="opacity-50">({stats.count})</span></span>
+                                        <span className="font-semibold" title="Total (Income + Payment)">
+                                          ₹{(stats.income + stats.payment).toFixed(0)}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-center py-4 bg-white/5 rounded-lg">
+                            <p className="opacity-75 text-sm">No records found for this date.</p>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="text-center py-12 bg-white border border-gray-200 rounded-xl shadow-sm">
+                    <p className="text-gray-600 mb-4">Select date range to view summary</p>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-semibold text-gray-800">Customer Balance Overview</h2>
