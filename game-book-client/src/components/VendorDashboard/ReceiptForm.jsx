@@ -18,6 +18,7 @@ import {
   FaWhatsapp,
   FaDownload,
   FaTimes,
+  FaSave,
 } from "react-icons/fa";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -147,6 +148,8 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
   const [isSharing, setIsSharing] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [shareImageData, setShareImageData] = useState(null);
+  const [isGlobalValuesSaved, setIsGlobalValuesSaved] = useState(false);
+  const [isSavingGlobalValues, setIsSavingGlobalValues] = useState(false);
 
   // --- State for global 'special' type ---
   const [globalSpecialType, setGlobalSpecialType] = useState("jackpot");
@@ -169,6 +172,9 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
 
   // --- NEW: Ref to track previous serial number to prevent re-runs ---
   const prevSerialNumberRef = useRef();
+
+  // --- NEW: Refs for input fields for Enter key navigation ---
+  const inputRefs = useRef({});
 
   // --- UPDATED: Clear button now preserves company name ---
   const clearForm = useCallback(() => {
@@ -208,35 +214,6 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
     }
   }, [token]);
 
-  const fetchLatestOpenCloseValues = useCallback((allReceipts) => {
-    const todayStr = dayjs().format("YYYY-MM-DD");
-    const receiptsFromToday = allReceipts.filter(
-      (r) => dayjs(r.date).format("YYYY-MM-DD") === todayStr
-    );
-
-    let lastOpenClose = initialOpenCloseValues;
-    if (receiptsFromToday.length > 0) {
-      receiptsFromToday.sort((a, b) => {
-        const dateA = dayjs(a.date);
-        const dateB = dayjs(b.date);
-        const dateDiff = dateB.diff(dateA);
-        if (dateDiff !== 0) return dateDiff;
-        if (b._id > a._id) return 1;
-        if (a._id < b._id) return -1;
-        return 0;
-      });
-      const latestReceiptOfTheDay = receiptsFromToday[0];
-
-      if (latestReceiptOfTheDay.openCloseValues) {
-        lastOpenClose = {
-          open: latestReceiptOfTheDay.openCloseValues.open || "",
-          close: latestReceiptOfTheDay.openCloseValues.close || "",
-          jod: latestReceiptOfTheDay.openCloseValues.jod || "",
-        };
-      }
-    }
-    return lastOpenClose;
-  }, []);
 
   const fetchReceipts = useCallback(async () => {
     if (!token) return;
@@ -281,24 +258,70 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
           });
           
           const latestReceipt = customerReceipts[0];
-          if (latestReceipt.openCloseValues) {
-            setOpenCloseValues({
-              open: latestReceipt.openCloseValues.open || "",
-              close: latestReceipt.openCloseValues.close || "",
-              jod: latestReceipt.openCloseValues.jod || "",
-            });
-          }
+          // Note: Open/Close/Jod values are now global daily values, not loaded from receipts
         }
       }
     } catch (error) {
       toast.error("Failed to load saved receipts.");
     }
-  }, [token, formData._id, formData.customerId, fetchLatestOpenCloseValues]);
+  }, [token, formData._id, formData.customerId, formData.customerCompany]);
+
+  // Load global daily values for the current date
+  const loadGlobalDailyValues = useCallback(async () => {
+    if (!token) return;
+    
+    try {
+      const currentDate = dayjs().format("YYYY-MM-DD");
+      const response = await axios.get(
+        `${API_BASE_URI}/api/daily-global-values/${currentDate}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (response.data.success && response.data.dailyValues) {
+        setOpenCloseValues({
+          open: response.data.dailyValues.open || "",
+          close: response.data.dailyValues.close || "",
+          jod: response.data.dailyValues.jod || "",
+        });
+        setIsGlobalValuesSaved(true);
+      } else {
+        // No saved values for today
+        setOpenCloseValues(initialOpenCloseValues);
+        setIsGlobalValuesSaved(false);
+      }
+    } catch (error) {
+      console.error("Error loading global daily values:", error);
+      // If error, assume not saved
+      setIsGlobalValuesSaved(false);
+    }
+  }, [token]);
+
+  // Track current day for auto-reload
+  const [currentDay, setCurrentDay] = useState(dayjs().format("YYYY-MM-DD"));
 
   useEffect(() => {
     fetchCustomers();
     fetchReceipts();
-  }, [fetchCustomers, fetchReceipts]);
+    // Only load global values if not editing an existing receipt
+    if (!receiptId) {
+      loadGlobalDailyValues();
+    }
+  }, [fetchCustomers, fetchReceipts, loadGlobalDailyValues, receiptId]);
+
+  // Reload global values when day changes (new day)
+  useEffect(() => {
+    const today = dayjs().format("YYYY-MM-DD");
+    if (currentDay !== today) {
+      setCurrentDay(today);
+      // Reload global values for the new day
+      if (!formData._id && !receiptId) {
+        // Only reload if not editing an existing receipt
+        loadGlobalDailyValues();
+      }
+    }
+  }, [currentDay, loadGlobalDailyValues, formData._id, receiptId]);
 
   // --- NEW: Load customer from query params (for edit button from Report) ---
   useEffect(() => {
@@ -486,17 +509,7 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
             lastAdvanceAmount = latestReceipt.finalTotal.toString();
           }
 
-          // --- NEW: Load open/close values from customer's latest receipt ---
-          if (latestReceipt.openCloseValues) {
-            setOpenCloseValues({
-              open: latestReceipt.openCloseValues.open || "",
-              close: latestReceipt.openCloseValues.close || "",
-              jod: latestReceipt.openCloseValues.jod || "",
-            });
-          } else {
-            // If no openCloseValues in receipt, set to initial (empty) values
-            setOpenCloseValues(initialOpenCloseValues);
-          }
+          // Note: Open/Close/Jod values are now global daily values, not loaded from receipts
 
           // --- REMOVED: Logic to load cutting amount removed ---
           // lastCuttingAmount = latestReceipt.cuttingAmount?.toString() || "";
@@ -586,21 +599,9 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
       
       const latestReceipt = customerReceipts[0];
       
-      // Load open/close values from customer's latest receipt
-      if (latestReceipt.openCloseValues) {
-        setOpenCloseValues({
-          open: latestReceipt.openCloseValues.open || "",
-          close: latestReceipt.openCloseValues.close || "",
-          jod: latestReceipt.openCloseValues.jod || "",
-        });
-      } else {
-        // If no openCloseValues, set to initial (empty) values
-        setOpenCloseValues(initialOpenCloseValues);
-      }
-    } else {
-      // No receipts for this customer - set to initial values
-      setOpenCloseValues(initialOpenCloseValues);
+      // Note: Open/Close/Jod values are now global daily values, not loaded from receipts
     }
+    // Note: Open/Close/Jod values are now global daily values, loaded separately
   }, [receipts, formData.customerId]);
 
   // --- UPDATED: Click-outside handler for BOTH dropdowns ---
@@ -743,6 +744,51 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
   const handleOpenCloseChange = (e) => {
     const { name, value } = e.target;
     setOpenCloseValues((prev) => ({ ...prev, [name]: value }));
+    // When values change, mark as unsaved
+    setIsGlobalValuesSaved(false);
+  };
+
+  // Handle Enter key to move to next input field
+  const handleKeyDown = (e, currentField, nextField) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const nextInputId = nextField;
+      if (inputRefs.current[nextInputId]) {
+        inputRefs.current[nextInputId].focus();
+      }
+    }
+  };
+
+  // Save global daily values
+  const saveGlobalDailyValues = async () => {
+    if (!token) return;
+
+    setIsSavingGlobalValues(true);
+    try {
+      const currentDate = dayjs().format("YYYY-MM-DD");
+      const response = await axios.post(
+        `${API_BASE_URI}/api/daily-global-values`,
+        {
+          date: currentDate,
+          open: openCloseValues.open || "",
+          close: openCloseValues.close || "",
+          jod: openCloseValues.jod || "",
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (response.data.success) {
+        setIsGlobalValuesSaved(true);
+        toast.success("Global daily values saved successfully!");
+      }
+    } catch (error) {
+      console.error("Error saving global daily values:", error);
+      toast.error("Failed to save global daily values");
+    } finally {
+      setIsSavingGlobalValues(false);
+    }
   };
 
   // --- UPDATED: Row change handler now includes 'panType' ---
@@ -1324,23 +1370,63 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
     const isPan = fieldName === "pan";
     const panType = isPan ? data.type || "sp" : "sp";
 
+    // Determine next field
+    let nextField = '';
+    if (fieldName === 'pan') {
+      nextField = `gun_val1_${index}`;
+    } else if (fieldName === 'gun') {
+      nextField = `special_val1_${index}`;
+    }
+
     return (
       <div className="flex flex-col items-center justify-center space-y-1 sm:space-y-1.5 text-xs sm:text-sm p-1 sm:p-1.5">
         {/* Input row */}
         <div className="print-hidden flex items-center justify-center space-x-1 sm:space-x-1.5">
           <input
+            ref={(el) => {
+              const key = `${fieldName}_val1_${index}`;
+              if (el) inputRefs.current[key] = el;
+            }}
             type="number"
             name={`${fieldName}Val1`}
             value={data.val1 || ""}
             onChange={(e) => handleRowChange(index, e)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                const nextKey = `${fieldName}_val2_${index}`;
+                if (inputRefs.current[nextKey]) {
+                  inputRefs.current[nextKey].focus();
+                }
+              }
+            }}
             className="w-9 sm:w-10 md:w-12 text-center border border-gray-300 rounded p-1 text-xs sm:text-sm"
           />
           <span className="text-gray-600 text-xs sm:text-sm">×</span>
           <input
+            ref={(el) => {
+              const key = `${fieldName}_val2_${index}`;
+              if (el) inputRefs.current[key] = el;
+            }}
             type="number"
             name={`${fieldName}Val2`}
             value={data.val2 || ""}
             onChange={(e) => handleRowChange(index, e)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                // Move to next field or next row
+                if (nextField && inputRefs.current[nextField]) {
+                  inputRefs.current[nextField].focus();
+                } else {
+                  // Move to next row's income field
+                  const nextIncomeKey = `income_${index + 1}`;
+                  if (inputRefs.current[nextIncomeKey]) {
+                    inputRefs.current[nextIncomeKey].focus();
+                  }
+                }
+              }
+            }}
             className="w-9 sm:w-10 md:w-12 text-center border border-gray-300 rounded p-1 text-xs sm:text-sm"
           />
         </div>
@@ -1391,18 +1477,45 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
         {/* Input row */}
         <div className="print-hidden flex items-center justify-center space-x-1 sm:space-x-1.5">
           <input
+            ref={(el) => {
+              const key = `special_val1_${index}`;
+              if (el) inputRefs.current[key] = el;
+            }}
             type="number"
             name="specialVal1"
             value={data.val1 || ""}
             onChange={(e) => handleRowChange(index, e)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                const nextKey = `special_val2_${index}`;
+                if (inputRefs.current[nextKey]) {
+                  inputRefs.current[nextKey].focus();
+                }
+              }
+            }}
             className="w-9 sm:w-10 md:w-12 text-center border border-gray-300 rounded p-1 text-xs sm:text-sm"
           />
           <span className="text-gray-600 text-xs sm:text-sm">×</span>
           <input
+            ref={(el) => {
+              const key = `special_val2_${index}`;
+              if (el) inputRefs.current[key] = el;
+            }}
             type="number"
             name="specialVal2"
             value={data.val2 || ""}
             onChange={(e) => handleRowChange(index, e)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                // Move to next row's income field
+                const nextIncomeKey = `income_${index + 1}`;
+                if (inputRefs.current[nextIncomeKey]) {
+                  inputRefs.current[nextIncomeKey].focus();
+                }
+              }
+            }}
             className="w-9 sm:w-10 md:w-12 text-center border border-gray-300 rounded p-1 text-xs sm:text-sm"
           />
         </div>
@@ -1755,33 +1868,77 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
               <div className="flex flex-col lg:flex-row items-center lg:gap-2">
                 <span className="font-bold text-xs sm:text-sm md:text-base whitespace-nowrap mb-1 lg:mb-0">Open:</span>
                 <input
+                  ref={(el) => {
+                    if (el) inputRefs.current['open'] = el;
+                  }}
                   type="text"
                   name="open"
                   value={openCloseValues.open}
                   onChange={handleOpenCloseChange}
-                  className="w-full lg:w-24 text-center border border-gray-300 rounded text-xs sm:text-sm md:text-base p-1 sm:p-1.5"
+                  onKeyDown={(e) => handleKeyDown(e, 'open', 'close')}
+                  disabled={!formData._id && isGlobalValuesSaved && !isSavingGlobalValues}
+                  className={`w-full lg:w-24 text-center border border-gray-300 rounded text-xs sm:text-sm md:text-base p-1 sm:p-1.5 ${
+                    !formData._id && isGlobalValuesSaved ? 'bg-gray-100' : ''
+                  }`}
                 />
               </div>
               <div className="flex flex-col lg:flex-row items-center lg:gap-2">
                 <span className="font-bold text-xs sm:text-sm md:text-base whitespace-nowrap mb-1 lg:mb-0">Close:</span>
                 <input
+                  ref={(el) => {
+                    if (el) inputRefs.current['close'] = el;
+                  }}
                   type="text"
                   name="close"
                   value={openCloseValues.close}
                   onChange={handleOpenCloseChange}
-                  className="w-full lg:w-24 text-center border border-gray-300 rounded text-xs sm:text-sm md:text-base p-1 sm:p-1.5"
+                  onKeyDown={(e) => handleKeyDown(e, 'close', 'jod')}
+                  disabled={!formData._id && isGlobalValuesSaved && !isSavingGlobalValues}
+                  className={`w-full lg:w-24 text-center border border-gray-300 rounded text-xs sm:text-sm md:text-base p-1 sm:p-1.5 ${
+                    !formData._id && isGlobalValuesSaved ? 'bg-gray-100' : ''
+                  }`}
                 />
               </div>
               <div className="flex flex-col lg:flex-row items-center lg:gap-2">
                 <span className="font-bold text-xs sm:text-sm md:text-base whitespace-nowrap mb-1 lg:mb-0">Jod:</span>
                 <input
+                  ref={(el) => {
+                    if (el) inputRefs.current['jod'] = el;
+                  }}
                   type="text"
                   name="jod"
                   value={openCloseValues.jod}
                   onChange={handleOpenCloseChange}
-                  className="w-full lg:w-24 text-center border border-gray-300 rounded text-xs sm:text-sm md:text-base p-1 sm:p-1.5"
+                  onKeyDown={(e) => handleKeyDown(e, 'jod', 'day')}
+                  disabled={!formData._id && isGlobalValuesSaved && !isSavingGlobalValues}
+                  className={`w-full lg:w-24 text-center border border-gray-300 rounded text-xs sm:text-sm md:text-base p-1 sm:p-1.5 ${
+                    !formData._id && isGlobalValuesSaved ? 'bg-gray-100' : ''
+                  }`}
                 />
               </div>
+              {/* Save/Edit Button - Only show when not editing an existing receipt */}
+              {!formData._id && (
+                <div className="col-span-3 lg:col-span-1 flex justify-center lg:justify-start mt-2 lg:mt-0">
+                  {!isGlobalValuesSaved ? (
+                    <button
+                      onClick={saveGlobalDailyValues}
+                      disabled={isSavingGlobalValues}
+                      className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-medium flex items-center gap-1"
+                    >
+                      <FaSave size={12} />
+                      {isSavingGlobalValues ? 'Saving...' : 'Save'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsGlobalValuesSaved(false)}
+                      className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-xs sm:text-sm font-medium flex items-center gap-1"
+                    >
+                      <FaEdit size={12} />
+                      Edit
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Open/Close/Jod Display (Print Visible) */}
@@ -1807,10 +1964,14 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
                 <div className="flex items-center">
                   <span className="mr-2 text-sm sm:text-base md:text-lg font-medium">वार:-</span>
                   <input
+                    ref={(el) => {
+                      if (el) inputRefs.current['day'] = el;
+                    }}
                     type="text"
                     name="day"
                     value={formData.day}
                     onChange={handleChange}
+                    onKeyDown={(e) => handleKeyDown(e, 'day', 'date')}
                     className="font-semibold bg-transparent border-b border-gray-400 print-hidden w-24 sm:w-28 text-sm sm:text-base px-1"
                   />
                   <span className="hidden print:inline font-semibold">
@@ -1820,10 +1981,14 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
                 <div className="flex items-center">
                   <span className="mr-2 text-sm sm:text-base md:text-lg font-medium">दि:-</span>
                   <input
+                    ref={(el) => {
+                      if (el) inputRefs.current['date'] = el;
+                    }}
                     type="text"
                     name="date"
                     value={formData.date}
                     onChange={handleChange}
+                    onKeyDown={(e) => handleKeyDown(e, 'date', 'customerSearch')}
                     placeholder="DD-MM-YYYY"
                     className="font-semibold bg-transparent border-b border-gray-400 print-hidden w-28 sm:w-32 text-sm sm:text-base px-1"
                   />
@@ -1843,11 +2008,24 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
                     <div className="flex items-center w-full gap-2">
                       <strong className="text-sm sm:text-base md:text-lg whitespace-nowrap">Sr.No:</strong>
                       <input
+                        ref={(el) => {
+                          if (el) inputRefs.current['customerSearch'] = el;
+                        }}
                         type="search"
                         placeholder="Search S.No or Name..."
                         value={customerDisplayValue}
                         onChange={handleCustomerSearchChange}
                         onFocus={() => setIsCustomerDropdownOpen(true)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !isCustomerDropdownOpen) {
+                            e.preventDefault();
+                            // Move to first game row income field
+                            const firstIncomeKey = `income_0`;
+                            if (inputRefs.current[firstIncomeKey]) {
+                              inputRefs.current[firstIncomeKey].focus();
+                            }
+                          }
+                        }}
                         className="p-2 sm:p-2.5 flex-1 rounded-md border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
                       />
                     </div>
@@ -1970,13 +2148,45 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
                     const cellTotal =
                       evaluateExpression(row[colName]) * effectiveMultiplier;
 
+                    // Determine next field based on column
+                    let nextField = '';
+                    if (colName === 'o') {
+                      nextField = `jod_${index}`;
+                    } else if (colName === 'jod') {
+                      nextField = `ko_${index}`;
+                    } else if (colName === 'ko') {
+                      // Move to pan val1 or next row income
+                      nextField = `pan_val1_${index}`;
+                    }
+
                     return (
                       <div className="flex flex-col items-end p-1 sm:p-1.5">
                         <input
+                          ref={(el) => {
+                            const key = `${colName}_${index}`;
+                            if (el) inputRefs.current[key] = el;
+                          }}
                           type="text"
                           name={colName}
                           value={row[colName]}
                           onChange={(e) => handleRowChange(index, e)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              if (nextField && inputRefs.current[nextField]) {
+                                inputRefs.current[nextField].focus();
+                              } else if (colName === 'ko') {
+                                // Try pan val1, or next row income
+                                const panKey = `pan_val1_${index}`;
+                                const nextIncomeKey = `income_${index + 1}`;
+                                if (inputRefs.current[panKey]) {
+                                  inputRefs.current[panKey].focus();
+                                } else if (inputRefs.current[nextIncomeKey]) {
+                                  inputRefs.current[nextIncomeKey].focus();
+                                }
+                              }
+                            }
+                          }}
                           className="w-full text-right bg-white border border-gray-300 rounded p-1 sm:p-1.5 text-xs sm:text-sm mb-1 print-hidden"
                         />
                         <div className="hidden print:block w-full print:text-center print:border-b print:border-gray-400 print:pb-1 print:mb-1">
@@ -2057,10 +2267,23 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
                         <td className="border p-1 sm:p-1.5 md:p-2 text-xs sm:text-sm md:text-base">{row.type}</td>
                         <td className="border p-1 sm:p-1.5 md:p-2">
                           <input
+                            ref={(el) => {
+                              const key = `income_${index}`;
+                              if (el) inputRefs.current[key] = el;
+                            }}
                             type="text"
                             name="income"
                             value={row.income}
                             onChange={(e) => handleRowChange(index, e)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const nextKey = `o_${index}`;
+                                if (inputRefs.current[nextKey]) {
+                                  inputRefs.current[nextKey].focus();
+                                }
+                              }
+                            }}
                             className="w-full text-right border border-gray-300 rounded p-1 sm:p-1.5 text-xs sm:text-sm md:text-base print-hidden"
                           />
                           <span className="hidden print:block text-right text-xs sm:text-sm">
@@ -2099,10 +2322,14 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
                   <td className="border p-1 sm:p-1.5 md:p-2 text-right text-xs sm:text-sm md:text-base">
                     <div className="flex items-center justify-end print-hidden">
                       <input
+                        ref={(el) => {
+                          if (el) inputRefs.current['deductionRate'] = el;
+                        }}
                         type="number"
                         name="deductionRate"
                         value={formData.deductionRate}
                         onChange={handleChange}
+                        onKeyDown={(e) => handleKeyDown(e, 'deductionRate', 'pendingAmount')}
                         className="w-10 sm:w-12 text-right bg-white border-b p-1 text-xs sm:text-sm"
                         min="0"
                         max="100"
@@ -2144,10 +2371,14 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
                   <td className="border p-1 sm:p-1.5 md:p-2 text-xs sm:text-sm md:text-base">मा.</td>
                   <td className="border p-1 sm:p-1.5 md:p-2">
                     <input
+                      ref={(el) => {
+                        if (el) inputRefs.current['pendingAmount'] = el;
+                      }}
                       type="number"
                       name="pendingAmount"
                       value={formData.pendingAmount}
                       onChange={handleChange}
+                      onKeyDown={(e) => handleKeyDown(e, 'pendingAmount', 'jama')}
                       className="w-full text-right bg-white border-b p-1 text-xs sm:text-sm md:text-base print-hidden"
                     />
                     <span className="hidden print:block text-right text-xs sm:text-sm md:text-base">
@@ -2213,10 +2444,29 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
               <div className="flex justify-between items-center">
                 <span className="font-semibold">जमा:-</span>
                 <input
+                  ref={(el) => {
+                    if (el) inputRefs.current['jama'] = el;
+                  }}
                   type="number"
                   name="jama"
                   value={formData.jama}
                   onChange={handleChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      if (formData.isChukEnabled) {
+                        const chukPercKey = 'chukPercentage';
+                        if (inputRefs.current[chukPercKey]) {
+                          inputRefs.current[chukPercKey].focus();
+                        }
+                      } else {
+                        const chukKey = 'chuk';
+                        if (inputRefs.current[chukKey]) {
+                          inputRefs.current[chukKey].focus();
+                        }
+                      }
+                    }
+                  }}
                   className="w-2/3 sm:w-3/5 text-right bg-transparent border-b print-hidden p-1"
                 />
                 <span className="hidden print:inline font-bold">
@@ -2254,10 +2504,14 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
                 {formData.isChukEnabled && (
                   <div className="print-hidden flex items-center">
                     <input
+                      ref={(el) => {
+                        if (el) inputRefs.current['chukPercentage'] = el;
+                      }}
                       type="number"
                       name="chukPercentage"
                       value={formData.chukPercentage}
                       onChange={handleChange}
+                      onKeyDown={(e) => handleKeyDown(e, 'chukPercentage', 'advanceAmount')}
                       className="w-12 sm:w-14 text-right bg-transparent border-b p-1"
                     />
                     <span className="ml-1">%</span>
@@ -2267,11 +2521,23 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
                 {/* Chuk Amount Input */}
                 {/* --- MODIFIED: This is type="number", so it accepts negative values --- */}
                 <input
+                  ref={(el) => {
+                    if (el) inputRefs.current['chuk'] = el;
+                  }}
                   type="number"
                   name="chuk"
                   value={formData.chuk}
                   onChange={handleChange}
                   disabled={formData.isChukEnabled} // Disable if LD
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !formData.isChukEnabled) {
+                      e.preventDefault();
+                      const advanceKey = 'advanceAmount';
+                      if (inputRefs.current[advanceKey]) {
+                        inputRefs.current[advanceKey].focus();
+                      }
+                    }
+                  }}
                   className={`w-1/3 sm:w-2/5 text-right bg-transparent border-b print-hidden p-1 ${
                     formData.isChukEnabled ? "bg-gray-100" : ""
                   }`}
@@ -2303,10 +2569,14 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
               <div className="flex justify-between items-center">
                 <span className="font-semibold">आड:-</span>
                 <input
+                  ref={(el) => {
+                    if (el) inputRefs.current['advanceAmount'] = el;
+                  }}
                   type="number"
                   name="advanceAmount"
                   value={formData.advanceAmount}
                   onChange={handleChange}
+                  onKeyDown={(e) => handleKeyDown(e, 'advanceAmount', 'cuttingAmount')}
                   className="w-2/3 sm:w-3/5 text-right bg-transparent border-b print-hidden p-1"
                 />
                 <span className="hidden print:inline font-bold">
@@ -2316,10 +2586,19 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
               <div className="flex justify-between items-center">
                 <span className="font-semibold">कटिंग:-</span>
                 <input
+                  ref={(el) => {
+                    if (el) inputRefs.current['cuttingAmount'] = el;
+                  }}
                   type="number"
                   name="cuttingAmount"
                   value={formData.cuttingAmount}
                   onChange={handleChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      // End of form, could focus save button or just stop
+                    }
+                  }}
                   className="w-2/3 sm:w-3/5 text-right bg-transparent border-b print-hidden p-1"
                 />
                 <span className="hidden print:inline font-bold">
