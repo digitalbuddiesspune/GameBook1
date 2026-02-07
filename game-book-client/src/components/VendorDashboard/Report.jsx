@@ -250,7 +250,7 @@ const CustomerGridCard = ({
             <label className="text-sm font-medium text-gray-700 mb-1 block">येणे (To Receive)</label>
             <input
               type="number"
-              value={editValues.yene}
+              value={editValues.yene - editValues.dene} 
               onChange={(e) => handleInputChange('yene', e.target.value)}
               className="w-full px-3 py-2 border-2 border-green-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 bg-green-50"
               placeholder="0"
@@ -1403,9 +1403,9 @@ export default function ReportPage() {
                                   const commission = total * 0.10; // 10% commission
                                   const afterTotal = total - commission;
                                   
-                                  // Use original येणे and देणे from receipts data
-                                  const yene = dateData.grandTotals.totalIncome || 0;
+                                  // येणे = ए. टो. (After Total) - देणे
                                   const dene = dateData.grandTotals.totalPayment || 0;
+                                  const yene = afterTotal - dene;
 
                                   return (
                                     <>
@@ -1484,9 +1484,9 @@ export default function ReportPage() {
                                           const commission = total * 0.10;
                                           const afterTotal = total - commission;
                                           
-                                          // Use original येणे and देणे from company data
-                                          const yene = data.totalIncome || 0;
+                                          // येणे = ए. टो. (After Total) - देणे
                                           const dene = data.totalPayment || 0;
+                                          const yene = afterTotal - dene;
 
                                           return (
                                             <div className="space-y-2">
@@ -1608,9 +1608,9 @@ export default function ReportPage() {
                           const commission = total * 0.10; // 10% commission
                           const afterTotal = total - commission;
                           
-                          // Use original येणे and देणे from receipts data
-                          const yene = dailyTotals.grandTotals.totalIncome || 0;
+                          // येणे = ए. टो. (After Total) - देणे
                           const dene = dailyTotals.grandTotals.totalPayment || 0;
+                          const yene = afterTotal - dene;
 
                           return (
                             <>
@@ -1686,9 +1686,9 @@ export default function ReportPage() {
                                   const commission = total * 0.10;
                                   const afterTotal = total - commission;
                                   
-                                  // Use original येणे and देणे from company data
-                                  const yene = data.totalIncome || 0;
+                                  // येणे = ए. टो. (After Total) - देणे
                                   const dene = data.totalPayment || 0;
+                                  const yene = afterTotal - dene;
 
                                   return (
                                     <div className="space-y-2">
