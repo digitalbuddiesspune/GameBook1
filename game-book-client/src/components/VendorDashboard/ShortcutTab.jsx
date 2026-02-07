@@ -955,7 +955,8 @@ const ShortcutTab = ({ businessName }) => {
 
     const advanceAmount = Number(customerData.advanceAmount) || 0;
     const cuttingAmount = Number(customerData.cuttingAmount) || 0;
-    const finalTotal = finalTotalAfterChuk - advanceAmount - cuttingAmount;
+    // आड (advanceAmount) is separate and not included in टो
+    const finalTotal = finalTotalAfterChuk - cuttingAmount;
 
     return {
       totalIncome,
@@ -1992,6 +1993,7 @@ const ShortcutTab = ({ businessName }) => {
                                   <span className="font-semibold">टो:-</span>
                                   <span className="font-bold text-lg text-green-600">
                                     {totals.finalTotal.toFixed(2)}
+                                    {/* {advanceAmount + cuttingAmount} */}
                                   </span>
                                 </div>
                               </div>

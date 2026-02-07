@@ -944,10 +944,10 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
     const advanceAmount = Number(formData.advanceAmount) || 0;
     const cuttingAmount = Number(formData.cuttingAmount) || 0;
 
-    // --- MODIFICATION: This calculation is correct.
     // If chuk is -50, jamaTotal - (-50) = jamaTotal + 50
     const finalTotalAfterChuk = jamaTotal - chuk;
-    const finalTotal = finalTotalAfterChuk - advanceAmount - cuttingAmount;
+    // आड (advanceAmount) is separate and not included in टो
+    const finalTotal = finalTotalAfterChuk - cuttingAmount;
 
     return {
       totalIncome,
@@ -2602,13 +2602,14 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
                   className="w-2/3 sm:w-3/5 text-right bg-transparent border-b print-hidden p-1"
                 />
                 <span className="hidden print:inline font-bold">
-                  {formData.cuttingAmount || 0}
+                  {formData.cuttingAmount  || 0}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="font-semibold">टो:-</span>
                 <span className="font-bold text-base sm:text-lg md:text-xl">
-                  {calculationResults.finalTotal.toFixed(2)}
+                  {/* {calculationResults.finalTotal.toFixed(2)} */}
+                  {formData.advanceAmount + formData.cuttingAmount}
                 </span>
               </div>
             </div>
