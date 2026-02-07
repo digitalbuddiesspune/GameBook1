@@ -951,7 +951,8 @@ const ShortcutTab = ({ businessName }) => {
     const jamaTotal = totalDue - jama;
 
     const chuk = Number(customerData.chuk) || 0;
-    const finalTotalAfterChuk = jamaTotal - chuk;
+    // Positive chuk adds, negative chuk subtracts
+    const finalTotalAfterChuk = jamaTotal + chuk;
 
     const advanceAmount = Number(customerData.advanceAmount) || 0;
     const cuttingAmount = Number(customerData.cuttingAmount) || 0;
