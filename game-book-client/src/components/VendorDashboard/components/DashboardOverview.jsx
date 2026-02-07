@@ -105,7 +105,7 @@ const DashboardOverview = ({
                     <div className="flex justify-between items-start mb-2">
                       <p className="font-bold text-base truncate pr-2" title={company}>{company}</p>
                       <span className="font-bold text-lg bg-white/20 px-2 py-0.5 rounded text-sm">
-                        ₹{(data.totalIncome + data.totalPayment).toFixed(0)}
+                        ₹{data.totalIncome.toFixed(0)}
                       </span>
                     </div>
                     <div className="flex gap-3 text-xs opacity-80 mb-3 pb-2 border-b border-white/10">
@@ -119,8 +119,8 @@ const DashboardOverview = ({
                         {Object.entries(data.gameTypeBreakdown).map(([type, stats]) => (
                           <div key={type} className="flex justify-between items-center text-xs">
                             <span className="opacity-80 font-medium">{type} <span className="opacity-50">({stats.count})</span></span>
-                            <span className="font-semibold" title="Total (Income + Payment)">
-                              ₹{(stats.income + stats.payment).toFixed(0)}
+                            <span className="font-semibold" title="Total Income">
+                              ₹{stats.income.toFixed(0)}
                             </span>
                           </div>
                         ))}

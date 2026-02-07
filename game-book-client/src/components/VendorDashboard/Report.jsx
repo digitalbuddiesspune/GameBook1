@@ -1390,9 +1390,9 @@ export default function ReportPage() {
                                     if (companyData.gameTypeBreakdown) {
                                       Object.entries(companyData.gameTypeBreakdown).forEach(([type, stats]) => {
                                         if (type === 'ओ.' || type === 'आ.') {
-                                          oTotal += (stats.income || 0) + (stats.payment || 0);
+                                          oTotal += (stats.income || 0);
                                         } else if (type === 'को.' || type === 'कु.') {
-                                          koTotal += (stats.income || 0) + (stats.payment || 0);
+                                          koTotal += (stats.income || 0);
                                         }
                                       });
                                     }
@@ -1473,9 +1473,9 @@ export default function ReportPage() {
                                           if (data.gameTypeBreakdown) {
                                             Object.entries(data.gameTypeBreakdown).forEach(([type, stats]) => {
                                               if (type === 'ओ.' || type === 'आ.') {
-                                                oAmount += (stats.income || 0) + (stats.payment || 0);
+                                                oAmount += (stats.income || 0);
                                               } else if (type === 'को.' || type === 'कु.') {
-                                                koAmount += (stats.income || 0) + (stats.payment || 0);
+                                                koAmount += (stats.income || 0);
                                               }
                                             });
                                           }
@@ -1532,8 +1532,8 @@ export default function ReportPage() {
                                             {Object.entries(data.gameTypeBreakdown).map(([type, stats]) => (
                                               <div key={type} className="flex justify-between items-center text-xs">
                                                 <span className="opacity-80 font-medium">{type} <span className="opacity-50">({stats.count})</span></span>
-                                                <span className="font-semibold" title="Total (Income + Payment)">
-                                                  ₹{(stats.income + stats.payment).toFixed(0)}
+                                                <span className="font-semibold" title="Total Income">
+                                                  ₹{stats.income.toFixed(0)}
                                                 </span>
                                               </div>
                                             ))}
@@ -1595,9 +1595,9 @@ export default function ReportPage() {
                             if (companyData.gameTypeBreakdown) {
                               Object.entries(companyData.gameTypeBreakdown).forEach(([type, stats]) => {
                                 if (type === 'ओ.' || type === 'आ.') {
-                                  oTotal += (stats.income || 0) + (stats.payment || 0);
+                                  oTotal += (stats.income || 0);
                                 } else if (type === 'को.' || type === 'कु.') {
-                                  koTotal += (stats.income || 0) + (stats.payment || 0);
+                                  koTotal += (stats.income || 0);
                                 }
                               });
                             }
@@ -1675,9 +1675,9 @@ export default function ReportPage() {
                                   if (data.gameTypeBreakdown) {
                                     Object.entries(data.gameTypeBreakdown).forEach(([type, stats]) => {
                                       if (type === 'ओ.' || type === 'आ.') {
-                                        oAmount += (stats.income || 0) + (stats.payment || 0);
+                                        oAmount += (stats.income || 0);
                                       } else if (type === 'को.' || type === 'कु.') {
-                                        koAmount += (stats.income || 0) + (stats.payment || 0);
+                                        koAmount += (stats.income || 0);
                                       }
                                     });
                                   }
@@ -1734,8 +1734,8 @@ export default function ReportPage() {
                                     {Object.entries(data.gameTypeBreakdown).map(([type, stats]) => (
                                       <div key={type} className="flex justify-between items-center text-xs">
                                         <span className="opacity-80 font-medium">{type} <span className="opacity-50">({stats.count})</span></span>
-                                        <span className="font-semibold" title="Total (Income + Payment)">
-                                          ₹{(stats.income + stats.payment).toFixed(0)}
+                                        <span className="font-semibold" title="Total Income">
+                                          ₹{stats.income.toFixed(0)}
                                         </span>
                                       </div>
                                     ))}
@@ -2094,7 +2094,7 @@ export default function ReportPage() {
                                   {/* Merged Totals */}
                                   <div className="flex justify-between items-center text-base mb-2">
                                     <span className="opacity-90">Total:</span>
-                                    <span className="font-bold">₹{(data.totalIncome + data.totalPayment).toFixed(2)}</span>
+                                    <span className="font-bold">₹{data.totalIncome.toFixed(2)}</span>
                                   </div>
                                   <div className="flex justify-between">
                                     <span className="opacity-75">Receipts:</span>
@@ -2114,7 +2114,7 @@ export default function ReportPage() {
                                           <div key={type} className="flex justify-between items-center text-[10px]">
                                             <span className="opacity-90">{type} <span className="opacity-60">({stats.count})</span></span>
                                             <div className="flex gap-2">
-                                              <span className="text-white font-bold" title="Total">₹{(stats.income + stats.payment).toFixed(0)}</span>
+                                              <span className="text-white font-bold" title="Total Income">₹{stats.income.toFixed(0)}</span>
                                             </div>
                                           </div>
                                         ))}

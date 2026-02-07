@@ -947,7 +947,7 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
     // --- MODIFICATION: This calculation is correct.
     // If chuk is -50, jamaTotal - (-50) = jamaTotal + 50
     const finalTotalAfterChuk = jamaTotal - chuk;
-    const finalTotal = advanceAmount - cuttingAmount;
+    const finalTotal = finalTotalAfterChuk - advanceAmount - cuttingAmount;
 
     return {
       totalIncome,
