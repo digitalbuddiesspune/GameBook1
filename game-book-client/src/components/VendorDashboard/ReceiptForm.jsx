@@ -501,12 +501,12 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
 
           // Load 'pendingAmount' (मागील) from the *last* receipt's final total
           if (latestReceipt.finalTotalAfterChuk !== undefined) {
-            lastPendingAmount = Number(latestReceipt.finalTotalAfterChuk).toFixed(2);
+            lastPendingAmount = latestReceipt.finalTotalAfterChuk.toString();
           }
 
-          // Load other carry-over values
-          if (latestReceipt.finalTotal !== undefined) {
-            lastAdvanceAmount = Number(latestReceipt.finalTotal).toFixed(2);
+          // Load आड from previous receipt's advanceAmount (separate value)
+          if (latestReceipt.advanceAmount !== undefined && latestReceipt.advanceAmount !== "") {
+            lastAdvanceAmount = Number(latestReceipt.advanceAmount).toFixed(2);
           }
 
           // Note: Open/Close/Jod values are now global daily values, not loaded from receipts
@@ -944,8 +944,8 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
     const advanceAmount = Number(formData.advanceAmount) || 0;
     const cuttingAmount = Number(formData.cuttingAmount) || 0;
 
-    // Positive chuk adds, negative chuk subtracts
-    const finalTotalAfterChuk = jamaTotal + chuk;
+    // If chuk is -50, jamaTotal - (-50) = jamaTotal + 50
+    const finalTotalAfterChuk = jamaTotal - chuk;
     // आड (advanceAmount) is separate and not included in टो
     const finalTotal = finalTotalAfterChuk - cuttingAmount;
 
@@ -2608,7 +2608,8 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
               <div className="flex justify-between">
                 <span className="font-semibold">टो:-</span>
                 <span className="font-bold text-base sm:text-lg md:text-xl">
-                  {(Number(formData.advanceAmount || 0) + Number(formData.cuttingAmount || 0)).toFixed(2)}
+                  {/* {calculationResults.finalTotal.toFixed(2)} */}
+                  {formData.advanceAmount + formData.cuttingAmount}
                 </span>
               </div>
             </div>
