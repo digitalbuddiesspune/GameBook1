@@ -128,11 +128,8 @@ const getAllCustomerBalances = async (req, res) => {
                 // Set the final balance (antim total)
                 customer.latestBalance = latestReceipt ? latestReceipt.finalTotalAfterChuk : 0;
                 
-                // --- THIS IS THE FIX ---
-                // The customer's current advance balance is the `finalTotal` 
-                // (from the "आड" box) of their most recent receipt.
-                customer.advanceAmount = latestReceipt ? latestReceipt.finalTotal : 0;
-                // --- END FIX ---
+                // Read actual advanceAmount from the receipt's आड field
+                customer.advanceAmount = latestReceipt ? (latestReceipt.advanceAmount || 0) : 0;
                 
                 return customer;
             })

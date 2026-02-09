@@ -68,7 +68,7 @@ const getAllCustomers = async (req, res) => {
 
         // Add balance information
         customer.latestBalance = latestReceipt ? latestReceipt.finalTotalAfterChuk : 0;
-        customer.advanceAmount = latestReceipt ? latestReceipt.finalTotal : 0;
+        customer.advanceAmount = latestReceipt ? (latestReceipt.advanceAmount || 0) : 0;
         
         return customer;
       })
@@ -175,7 +175,7 @@ const updateCustomerBalance = async (req, res) => {
     if (latestReceipt) {
       // Update the latest receipt with new balance values
       latestReceipt.finalTotalAfterChuk = finalBalance;
-      latestReceipt.finalTotal = advanceAmount;
+      latestReceipt.advanceAmount = advanceAmount;
       await latestReceipt.save();
     } else {
       // If no receipt exists, create a dummy receipt to store the balance
@@ -184,7 +184,7 @@ const updateCustomerBalance = async (req, res) => {
         vendorId: req.vendor.id,
         date: new Date(),
         finalTotalAfterChuk: finalBalance,
-        finalTotal: advanceAmount,
+        advanceAmount: advanceAmount,
         gameType: 'Balance Adjustment',
         totalJama: yeneAmount,
         totalUdhar: deneAmount,
