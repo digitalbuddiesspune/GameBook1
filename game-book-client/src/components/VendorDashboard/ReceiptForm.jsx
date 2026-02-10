@@ -1014,6 +1014,8 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
       ...calculationResults,
       openCloseValues,
       gameRows,
+      // Save the combined total (आड + कटिंग) as advanceAmount
+      advanceAmount: Number(formData.advanceAmount || 0) + Number(formData.cuttingAmount || 0),
       // Use actualDate if available (for edits), otherwise current time (for new receipts)
       date: formData.actualDate 
         ? new Date(formData.actualDate).toISOString() 
@@ -2608,8 +2610,7 @@ const ReceiptForm = ({ businessName = "Bappa Gaming" }) => {
               <div className="flex justify-between">
                 <span className="font-semibold">टो:-</span>
                 <span className="font-bold text-base sm:text-lg md:text-xl">
-                  {/* {calculationResults.finalTotal.toFixed(2)} */}
-                  {formData.advanceAmount + formData.cuttingAmount}
+                  {(Number(formData.advanceAmount || 0) + Number(formData.cuttingAmount || 0)).toFixed(2)}
                 </span>
               </div>
             </div>
